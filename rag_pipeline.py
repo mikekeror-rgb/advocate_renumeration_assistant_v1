@@ -21,7 +21,7 @@ import fee_router
 CHROMA_DIR =  str(Path(__file__).resolve().parent / "chroma_db")
 COLLECTION_NAME = "policy_docs"
 EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"
-GENERATION_MODEL_NAME = "llama-3.1-8b-instant"  # fast free-tier model; swap e.g. "llama-3.3-70b-versatile"
+GENERATION_MODEL_NAME = "openai/gpt-oss-20b" # fast free-tier model; swap e.g. "llama-3.3-70b-versatile"
 TOP_K = 10
 # Groq models (Llama 3.1 8B / 3.3 70B) support large context natively (~131k).
 # We no longer pass num_ctx; instead we keep CONTEXT_SNIPPET_CHARS so the prompt stays reasonable.
