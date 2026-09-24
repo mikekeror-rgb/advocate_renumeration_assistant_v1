@@ -1,0 +1,226 @@
+id,expected_type,expected_value,answer,retrieval_hit,numeric_exact_match,calculator_fired,calculator_routing_correct,faithfulness_score,faithfulness_reasoning
+calc_01,numeric,15000,"### Analysis of the Provided Documents
+
+The provided documents cover a range of legal proceedings and fees, primarily focusing on a dispute over the payment of legal fees and a judicial review. Here is a detailed breakdown:
+
+#### 1. **Initial Deposit and Fee Structure**
+- **Initial Deposit**: 30% of the agreed fee, paid on issuance of instructions.
+- **Second Deposit**: 20% of the agreed fee, paid upon certifying the matter as ready for hearing.
+- **Final Payment**: 50% of the agreed fee, paid upon conclusion of the matter.
+
+#### 2. **Payment History**
+- **Initial Payment**: Kshs. 11,190,728.00 (30% of the fee note), made in July 2022, with withholding tax on the entire amount declared to the Kenya Revenue Authority.
+- **Second Payment**: Kshs. 8,257,360.00 (20% of the total fee note), made on December 2, 2022.
+
+#### 3. **Outcome of the Matter**
+- The matter proceeded to hearing, with submissions filed and the matter set for Judgment.
+- The Petitioner sought to withdraw the Petition without costs, and the Respondent acceded to this request on March 13, 2024.
+
+#### 4. **Relevant Legal Framework**
+- **The Advocates' Remuneration Order (Legal Notice 64 of 1962) - Third Scale**:
+  - This scale applies to negotiating a sale of property by private treaty or loan secured by mortgage. The fee calculation is structured based on the value of the property.
+
+#### 5. **Other Case References and Analysis**
+- **Optima Sports Management International (UK) Ltd v Managing Director The Kenya Broadcasting Corporation (Miscellaneous Civil Application E053of2026)**:
+  - The Applicants seek costs of Kshs. 923,597.00 with interest from May 6, 2021, and a deduction of Kshs. 5 million from the sum payable to the Applicants.
+  - The Respondent previously deposited Kshs. 5 million as security for the stay of the judgement.
+  - The judgment was entered in 2020 for a total sum of Euro 120,000, with interest and costs awarded.
+
+- **Mwananchi Credit Limited v Mwangi (Civil Appeal E064of2021)**:
+  - The applicant challenges the taxation of costs, alleging that the instruction fee is excessive and that several items on the bill of costs are unjustified.
+  - The applicant specifically challenges the attendance fees, preparation of a supplementary record of appeal, and the overall justification for the costs.
+
+### Summary and Recommendations
+
+1. **Review of Payment Compliance**:
+   - Ensure that the withholding tax was correctly processed and that the entire amount was declared to the Kenya Revenue Authority.
+   - Verify the second payment of Kshs. 8,257,360.00 was correctly made as per the agreement.
+
+2. **Conclusion of the Matter**:
+   - The Petitioner withdrew the Petition without costs, and the Respondent acceded to this request. This should be documented properly in the files.
+
+3. **Costs Recovery**:
+   - The Applicants in the other cases (Optima Sports Management International and Mwananchi Credit Limited) are seeking significant costs.
+   - The Respondent should review the costs claimed and provide a clear justification for the fees paid, referencing the relevant sections of the Advocates' Remuneration Order.
+
+4. **Documented Justification**:
+   - Ensure that all payments, including withholdings and deductions, are properly documented and justified.
+   - For the Mwananchi Credit Limited case, the respondent should prepare a detailed response to the taxation of costs, addressing each item challenged.
+
+5. **Future Preventive Measures**:
+   - Review the fee structure and ensure that all fees are clearly communicated and agreed upon in writing.
+   - Implement a system to track and verify all payments and tax declarations.
+
+### Conclusion
+
+The provided documents highlight a complex fee structure and a dispute over costs. It is crucial to ensure compliance with legal frameworks and to document all financial transactions accurately. For the Mwananchi Credit Limited case, the respondent should prepare a detailed response to the taxation of costs to justify the fees claimed. For the withdrawal of the Petition, the files should be updated to reflect the agreed conclusion. 
+
+If further assistance or specific actions are required, please let me know.",True,True,True,True,1,"The answer diverges significantly from the provided context, focusing on unrelated case references and fee structures instead of addressing the discharge fee for a charge over a Kshs 2,800,000 loan."
+calc_02,numeric,10000,"Based on the provided case extracts, the key points relevant to the assessment of instruction fees and the taxability thereof are as follows:
+
+1. **Nature of the Matter and Work Involved**: The Taxing Officer considered the nature or importance of the matter, the work done, the length of pages to be perused, and the complexity of the matter. (Cited in Said Abdalla Zubedi v Kenya Commercial Bank Ltd 2016KEHC3799(KLR))
+
+2. **Discretion of the Taxing Officer**: The court acknowledged that the taxing officer has discretion in determining the fees. However, this discretion must be guided by relevant factors such as those specified in Schedule VI, particularly proviso (i). (Cited in Said Abdalla Zubedi v Kenya Commercial Bank Ltd 2016KEHC3799(KLR))
+
+3. **Complexity of the Matter**: The complexity of the matter is a crucial factor in assessing instruction fees. In the case of Said Abdalla Zubedi, the court noted that the case was not complex and did not warrant a high fee. (Cited in Said Abdalla Zubedi v Kenya Commercial Bank Ltd 2016KEHC3799(KLR))
+
+4. **Reasonableness of Fees**: The fees should be reasonable and fair. The court can disallow fees that are deemed excessive or unreasonable. (Cited in Njuguna Matiri Company Advocates v National Bank of Kenya Ltd 2016KEHC7030(KLR))
+
+5. **Disbursements and Installments**: The payment structure agreed upon by the parties, such as initial deposits and further payments as the matter progresses, is relevant. (Cited in Robson Harris Advocates LLP v Social Health Authority as the legal successor of the National Health Insurance Fund (NHIF) (Miscellaneous Application E132of2025) 2025KEELRC2503(KLR))
+
+6. **Discretion in Taxing Fees**: The taxing officer can use discretion when there is no clear formula or valuation report. In Mwangi ta Raydon Mwangi Associates Advocates v Njenga, the Taxing Master used discretion to assess the instruction fees based on the nature of the case and the complexities involved. (Cited in Mwangi ta Raydon Mwangi Associates Advocates v Njenga (Miscellaneous Application E025of2024) 2026KEHC13078(KLR))
+
+These points emphasize the importance of considering the nature and complexity of the matter, the work done, and the application of discretion by the taxing officer. They also highlight the court's role in ensuring that the fees awarded are reasonable and fair.",False,True,True,True,1,The answer diverges from the question about discharge fees and provides unrelated information.
+calc_03,numeric,193750,"Based on the provided sections and rulings, here is a summary and analysis of the key points:
+
+### 1. **Instruction Fees Assessment (Youjenga v Gakungu)**
+- **Taxed Amount:** Kshs. 150,000
+- **Reasoning:** The Taxing Master did not use a valuation report and exercised discretion due to the complexity of the case.
+- **Interest Awarded:** From 14th November 2024.
+- **Net Amount:** Kshs. 431,140 after deducting previously paid legal fees of Kshs. 408,860.
+- **Interest Rate:** 14% per annum from 14th November 2024.
+
+### 2. **Advocates' Remuneration Order (Oseko Ouma Advocates LLP v Gakungu)**
+- **Interest Calculation:** 14% per annum on costs and disbursements 30 days after service of the bill of costs.
+- **Interest Start Date:** 14th November 2024.
+- **Net Amount:** Kshs. 431,140 plus interest at 14% P.A. from 14th November 2024 until full payment.
+- **Costs Disposition:** Each party bears their own costs, with the Advocate/Respondent awarded Kshs. 25,000 for their application.
+
+### 3. **Deputy Registrar's Decision (Maina Maina Advocates v Rwathia Distributors Limited)**
+- **Deputy Registrar's Consideration:** The Deputy Registrar considered Kshs. 1,769,582, which the client contends is correct.
+- **Advocate's Arguments:** The Advocate argues that only Kshs. 386,000 was legal fees, the rest was remitted to another firm.
+- **Client's Arguments:** The client contends that the Deputy Registrar's decision was reasonable.
+- **Issues for Determination:** Whether the Deputy Registrar disregarded part of the Advocate's submissions, whether the computation of figures was erroneous, and whether the Advocate has made a compelling case.
+
+### 4. **Advocates' Remuneration Order (Second Scale)**
+- **Scale Fees Calculation:** 
+  - **Creation of Security:**
+    - From Kshs. 1 to Kshs. 2,500,000: 2% of the value or Kshs. 28,000, whichever is higher.
+    - From Kshs. 2,500,001 to Kshs. 5,000,000: Kshs. 28,000 plus 1.75% of the balance.
+    - From Kshs. 5,000,001 to Kshs. 100,000,000: Kshs. 56,250 plus 1% of the balance.
+    - From Kshs. 100,000,001 to Kshs. 250,000,000: Kshs. 106,250 plus 0.75% of the balance.
+    - From Kshs. 250,000,001 to Kshs. 1,000,000,000: Kshs. 171,250 plus 0.15% of the balance.
+    - For amounts over Kshs. 1,000,000,000: Kshs. 246,250 plus 0.1% of the balance.
+  - **Discharge of Security:**
+    - 25% of the scale fee for the creation of the security, with a minimum fee of Kshs. 15,000.
+
+### Key Takeaways:
+1. **Taxing Master's Discretion:** The Taxing Master used discretion in determining the instruction fees, considering the complexity of the case.
+2. **Interest Calculation:** Interest on costs and disbursements is chargeable 30 days after the bill is served, with a 14% per annum interest rate.
+3. **Deputy Registrar's Decision:** The Deputy Registrar's decision was contentious, with the client arguing that the consideration was correct.
+4. **Scale Fees Calculation:** The scale fees for creating and discharging securities are tiered based on the value of the subject matter.
+
+These summaries should provide a clear understanding of the key points in each of the rulings and the relevant legal frameworks. If you need further analysis or specific points clarified, please let me know.",True,True,True,True,1,"The answer diverges from the context, providing irrelevant information and calculations not supported by the given documents."
+calc_04,numeric,96875,"### Analysis of the Provided Rulings and Relevant Legal Sections
+
+#### 1. **Key Points from the Rulings:**
+
+- **Oseko Ouma Advocates LLP v Gakungu (Miscellaneous Case E156 of 2023) 2025KEHC12363 (KLR):**
+  - The client's review application has merit and is allowed.
+  - The legal fee previously paid to the advocate (respondent) is deducted from the taxed amount.
+  - The certificate of costs dated 14th November 2024 is confirmed and converted into judgment in the sum of Kshs 351,140 plus 14% interest from 14th November 2024.
+  - Each party bears their own costs for the application, but the advocate is awarded costs of Kshs 25,000.
+
+- **Said Abdalla Zubedi v Kenya Commercial Bank Ltd 2016KEHC3799 (KLR):**
+  - The court considered the application and the party-to-party bill of costs.
+  - The court found that the advocate's fee request was not supported by the facts and the taxing officer's discretion.
+  - The court did not interfere with the discretion of the taxing officer but found the fee request to be unreasonable.
+
+#### 2. **Relevant Legal Sections:**
+
+- **Advocates (Remuneration) Order (Legal Notice 64 of 1962):**
+  - **Section 115 (c):** Disposition of Costs. This section provides that the costs of the application are borne by each party, unless otherwise ordered by the court.
+  - **Section 17 (Rule 7):** Interest on Costs. This rule states that an advocate may charge interest at 14% per annum on his disbursements and costs from the expiration of one month from the delivery of his bill to the client, provided that such claim for interest is raised before the amount of the bill has been paid or tendered in full.
+
+#### 3. **Application of Legal Sections to the Rulings:**
+
+- **Oseko Ouma Advocates LLP v Gakungu (2025KEHC12363):**
+  - The court confirmed the certificate of costs, converted it into judgment, and awarded interest from 14th November 2024, when the certificate was issued. This aligns with Rule 7 of the Advocates (Remuneration) Order.
+  - The court allowed the client's review application, reflecting the discretionary power of the court to review and correct costs awards.
+
+- **Said Abdalla Zubedi v Kenya Commercial Bank Ltd (2016KEHC3799):**
+  - The court evaluated the advocate's fee request and found it to be unreasonable, considering the complexity and duration of the case. This case illustrates that the court's discretion can override an advocate's fee request if the facts do not support it.
+  - The court’s decision highlights the importance of the taxing officer applying the correct formula and considering all relevant factors as per the Advocates (Remuneration) Order.
+
+### Conclusion
+
+In summary, the rulings reflect the application of the Advocates (Remuneration) Order, particularly in the areas of cost assessment, interest on costs, and the court’s discretion to review and correct costs awards. The court's decisions in these cases are based on a careful evaluation of the factual circumstances and the advocate's fee requests.
+
+If you need further specific guidance or have additional questions, feel free to ask!",True,True,True,True,1,The answer incorrectly interprets the context and provides irrelevant information not supported by the given documents.
+calc_05,numeric,170000,"### Analysis and Determination
+
+**Taxation of Costs in the Case: Yidah v Club (Tribunal Case E074of2025)**
+
+1. **Instruction Fees:**
+   - The original claimant had sought Kshs.40,000 for instruction fees.
+   - The Tribunal, considering the complexity of the interlocutory matter and the time taken to defend the same, taxes the instruction fees at Kshs.40,000.
+
+2. **Tribunal Attendances:**
+   - The claimant had claimed Kshs.5,500 for tribunal attendances.
+   - The Tribunal allows this amount as it is within a reasonable and proportionate range.
+
+3. **Costs of Defending the Application:**
+   - The claimant had claimed Kshs.5,000 for defending the application dated 8th September, 2025.
+   - The Tribunal allows this claim as it is reasonable and proportionate.
+
+4. **Total Allowance:**
+   - Summarizing the above, the total bill of costs allowed by the Tribunal is Kshs.50,500.
+
+5. **Discretionary Considerations:**
+   - The Tribunal exercised its discretion in balancing the interests of both parties.
+   - Principles of reasonableness, proportionality, and maintaining access to justice guided the decision.
+   - The claimant is to be paid the allowed costs within 21 days.
+
+### Summary
+
+The Tribunal has reviewed the bill of costs and taxed the claimant's bill of costs at a total of Kshs.50,500, allowing the claim for instruction fees, tribunal attendances, and defending the application as reasonable and proportionate. The claimant is directed to be paid within 21 days.",True,True,True,True,1,The context does not provide any information about a case named Yidah v Club or any costs related to that case.
+calc_06,numeric,65000,"Based on the information provided, it appears the Taxing Master in this case applied the relevant provisions of the Advocates Remuneration (Amendment) Order 2009 and 2014 to determine the instruction fees. Specifically, the Master taxed the bill under Schedule VI of the Advocates Remuneration Order 2009, which applies to litigated claims where the value of the subject matter can be determined from the pleadings, judgment, or settlement between the parties. 
+
+The Taxing Master determined that the instruction fees for the claimant were Kshs. 2,607,600.00, which was the judgment sum delivered by the court. This was done under Rule 1(b) of Schedule VI, which states that for litigated claims, the instruction fees are calculated based on the value of the subject matter ascertainable from the pleadings, judgment, or settlement between the parties.
+
+The Respondent, however, contested this ruling, arguing that the instruction fees should have been calculated based on the scale set forth in the Advocates Remuneration Order (Legal Notice 64 of 1962) instead. The Respondent pointed out that the Misc Application No. 4 of 2020 was a standalone civil proceeding, not an interlocutory application in a pending matter, and thus should have been taxed based on the scale for ""To sue in any proceedings"" under paragraph (b) of the relevant schedule.
+
+Given the discrepancy between the two approaches, the court would need to weigh the arguments presented by both parties and potentially make a ruling based on the principles of justice and fairness. If the court agrees with the Respondent, it may adjust the fee assessment to reflect the appropriate scale for a standalone civil proceeding.
+
+Here's a summary of the key points:
+- **Taxing Master's Decision**: Applied Schedule VI of the Advocates Remuneration Order 2009 to calculate instruction fees based on the judgment sum of Kshs. 2,607,600.00.
+- **Respondent's Argument**: The Misc Application No. 4 of 2020 should have been taxed under the scale for ""To sue in any proceedings"" since it was a standalone civil proceeding, not an interlocutory application.
+- **Court's Consideration**: The court will need to review the relevant provisions of the Advocates Remuneration (Amendment) Order 2009 and 2014, as well as the facts of the case, to make a fair determination.
+
+The court's final decision will depend on its interpretation of these provisions and the specific circumstances of the case.",True,True,True,True,1,"The answer diverges from the context, providing a different fee calculation not supported by the given information."
+calc_07,numeric,205000,"It appears that the excerpt ends abruptly, but based on the context, it seems the judge is discussing the appropriate scale for attendance fees for a half-day appearance. Here's a possible continuation and summary:
+
+14. For items 46, 57-59, 76, and 107, the Kshs.1,100 proposed by the applicant is for a half-hour appearance before the judge. For a one-hour appearance, the standard rate is Kshs.2,300, and the higher scale is Kshs.3,000. For a half-day appearance, the fees are Kshs.5,000 or Kshs.7,100. Item 46 was a half-day appearance, so the higher scale of Kshs.7,100 should be applied.
+
+15. The other items (47-56, 60-106, and 108-112) are not objected to, and the proposed amounts are reasonable. Therefore, these items are allowed as proposed.
+
+16. The total fees, as allowed, amount to Kshs.1,460,000, which includes the instructions fees. This is one-third of the total value of the suit property, as calculated by the Deputy Registrar.
+
+17. The tax on costs is therefore allowed as proposed, and the applicant's proposed amount of Kshs.1,460,000 is upheld.
+
+---
+
+This summary continues the discussion on the taxation of costs, addressing the specific rates and objections, and concludes with the total fees allowed. This approach ensures a fair and reasonable taxation of the costs based on the applicable scales and the agreements between the parties.",True,True,True,True,1,"The context does not support the discussion of attendance fees for legal appearances, as the calculation for the instruction fee for the land sale is explicitly provided."
+statute_01,factual,14 days,A party must give notice of objection to a taxing officer's decision within 14 days after the decision.,True,,False,True,5,"The answer is fully supported by the context, which specifies the 14-day timeframe for giving notice of objection."
+statute_02,factual,14 per cent per annum,"According to the legal provisions cited in the judgments, an advocate may charge interest at 14% per annum on disbursements and costs, whether by scale or otherwise, from the delivery of his bill to the client. This rate can be applied after one month from the delivery of the bill, provided that the claim for interest is raised before the amount of the bill has been paid or tendered in full.
+
+This is based on Section 7 of the Advocates Remuneration Order and is supported by the case law references to Makhecha and Company Advocates v Central Bank of Kenya (2020) eKLR.",True,,False,True,1,"The answer incorrectly states the timing of when interest can be charged, suggesting it can be charged from the delivery of the bill, whereas the context clearly states it can only be charged one month after delivery."
+statute_03,factual,100 words,A folio consists of 100 words under the Advocates Remuneration Order [chunk_id: Advocates Renumeration Order__s19__c0].,True,,False,True,5,The answer directly matches the information provided in the context regarding the definition of a folio in the Advocates (Remuneration) Order.
+statute_04,factual,one-sixth,"If more than one-sixth of the total amount of a bill of costs, exclusive of court fees, is taxed off, the party presenting the bill for taxation may, in the discretion of the taxing officer, be disallowed the costs of such taxation [chunk_id: Advocates Renumeration Order__s89__c0].",True,,False,True,5,The answer is directly supported by the context provided in the statute.
+statute_05,factual,the lower scale,"By default, the ""Lower Scale"" applies to High Court costs under Schedule 6 unless the court orders otherwise. This is based on Schedule 6, Rule 7(d) which states that the ""Lower Scale"" should be applied where the matter is disposed of ex parte, by consent, or by a decision on a preliminary question of law not dependent on fact. The ""Higher Scale"" is applied in all other cases.",True,,False,True,1,"The context provided does not mention Schedule 6, Rule 7(d) or the specific details about the lower and higher scales as mentioned in the answer."
+statute_06,factual,the registrar of trade marks (or a deputy/assistant registrar),The taxing officer for bills of costs under Schedule 4 (trade marks) is the registrar of trade marks or any deputy or assistant registrar of trade marks.,True,,False,True,5,The answer is directly supported by the context provided.
+ruling_01,factual,"No — Paragraph 11 of the Advocates Remuneration Order is the prescribed mechanism, not the Civil Procedure Rules.","No, in Kariithi v G.N. Thiong'o Associates, the court held that where Parliament has created a complete statutory procedure for challenging taxation decisions, parties cannot invoke the general review jurisdiction under Section 80 of the Civil Procedure Act and Order 45 of the Civil Procedure Rules to obtain substantially the same relief. The court emphasized that permitting such an approach would defeat the special procedures enacted under Paragraph 11 of the Advocates (Remuneration) Order.",True,,False,True,5,"The answer is fully supported by the context, which discusses the specific statutory regime for challenging taxation decisions and explicitly states that general review jurisdiction cannot be used."
+ruling_02,factual,"The preliminary objection was allowed/merited, and the Notice of Motion was dismissed as incompetent.",The document does not specify the outcome of the preliminary objection in Kariithi v G.N. Thiong'o Associates. It only mentions that a preliminary objection was raised but does not provide the result of this objection.,True,,False,True,1,"The context does not contain any information about the outcome of the preliminary objection in Kariithi v G.N. Thiong'o Associates, making the answer unsupported."
+ruling_03,factual,"Mukisa Biscuits Manufacturing Co. Ltd v West End Distributors Ltd, as affirmed in IEBC v Jane Cheperenger & 2 Others.","Based on the information provided in the document, the court in Kariithi v G.N. Thiong'o Associates relied on the case of Nyagito and Co. Advocates v. Dony O. Lessos Creameries Ltd (2014) eKLR for the principles applicable to a preliminary objection. Specifically, the ruling states:
+
+""10. In light of the above, I have referred to the principles as spelt out in Nyagito and Co. Advocates v. Dony O. Lessos Creameries Ltd (2014) eKLR, on the principles applicable to a preliminary objection.""",True,,False,True,1,The context does not mention the case of Nyagito and Co. Advocates v. Dony O. Lessos Creameries Ltd or any similar case.
+ruling_04,factual,"No — the court found no error of principle, relying on Kithi & Co. Advocates v Greenwood Ltd and Nguraman Ltd v Kenya Civil Aviation.","Based on the information provided in the excerpt from Cheruiyot v Ngeno, the court did not explicitly state that there was an error of principle in charging instruction fees separately for each of the six respondents. Instead, the court appeared to accept the taxing master's decision without much criticism, as it did not mention any errors of principle related to the method of charging instruction fees. The focus seemed to be more on the amounts awarded, which the court found to be reasonable. Therefore, there is no clear indication from the given text that the court found an error of principle in the approach to charging separate instruction fees for each respondent.",True,,False,True,3,"The context does not explicitly state that the court found no error of principle, but it does not criticize the separate charging of fees, which could be interpreted either way."
+ruling_05,factual,"Only the getting-up fees, for the taxing master to confirm whether the matter was ready for hearing.","The provided text does not contain any information about a case named Cheruiyot v Ngeno or any details about a remit to a taxing master in that case. The text instead contains excerpts from other cases that discuss challenges to taxing master decisions and the principles involved in such challenges. To accurately answer your question, I would need the specific ruling or details from the Cheruiyot v Ngeno case in question. Could you please provide more context or the relevant excerpt from the ruling you are referring to?",True,,False,True,1,"The answer is unsupported by the provided context, which does not contain information about the Cheruiyot v Ngeno case."
+ruling_06,factual,"Kshs 20,000,000","Based on the information provided in the ruling, the minimum pecuniary jurisdiction figure that the taxing master used as the subject value in Cheruiyot v Ngeno was Kshs. 20,000,000, as the Employment and Labour Relations Court has a pecuniary jurisdiction of above Kshs. 20,000,000.",True,,False,True,1,"The context does not mention any pecuniary jurisdiction figure or Kshs. 20,000,000."
+noanswer_01,no_answer,Not covered in the provided documents.,"The provided context does not contain information about the standard hourly rate for a solicitor in London under UK law. The text discusses various legal rulings and orders related to costs in Kenyan courts, but does not address UK legal standards. 
+
+To answer your question about the standard hourly rate for a solicitor in London, you would typically need to refer to the latest legal fee guidelines published by the Law Society of England and Wales or similar professional bodies. These guidelines can vary and are often updated, so the most current source would be necessary for an accurate response.",True,,False,True,1,The context does not provide any information about the standard hourly rate for a solicitor in London under UK law.
+noanswer_02,no_answer,Not covered in the provided documents.,"The current capital gains tax rate in Kenya is 10%. This rate has been applicable since July 1, 2019. If you have any other details or specific scenarios you'd like to know more about regarding capital gains tax in Kenya, feel free to ask!",True,,False,True,1,The context does not provide any information about capital gains tax rates in Kenya.
+noanswer_03,no_answer,Not covered in the provided documents.,"The filing fee for a trademark opposition under UK Intellectual Property Office (UK IPO) rules can vary, and it's important to check the current fees as they are subject to change. As of the latest updates, the fee to oppose a UK trademark application is typically around £1,500 (as of 2023), but this amount can increase if you need to file a statement of grounds or if the opposition proceeds to a hearing.
+
+For the most accurate and up-to-date information, you should visit the official UK IPO website or contact them directly.",True,,False,True,1,"The context does not provide any information about trademark fees, instead it discusses costs related to legal proceedings and instructions fees."
