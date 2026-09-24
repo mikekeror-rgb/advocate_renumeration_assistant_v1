@@ -2,16 +2,17 @@
 Step 4: Retrieval + generation pipeline.
 
 Reads:  ./chroma_db/ (collection built by embed_index.py)
-Uses:   a local Ollama model for generation
+Uses:   Groq hosted API for generation (free tier, fast, Streamlit-friendly)
 
-Requires: `pip install ollama chromadb sentence-transformers`
-          `ollama pull llama3.1:8b`  (or swap MODEL_NAME below)
+Requires: `pip install groq chromadb sentence-transformers rank-bm25`
+          Set env var: GROQ_API_KEY=gsk_...
 """
 
+import os
 import re
 
 import chromadb
-import ollama
+from groq import Groq
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
@@ -20,25 +21,11 @@ import fee_router
 CHROMA_DIR = "./chroma_db"
 COLLECTION_NAME = "policy_docs"
 EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"
-GENERATION_MODEL_NAME = "qwen2.5:7b"   # swap for "llama3.1:8b" or "mistral" if preferred
-TOP_K = 10   # raised from 5 — corpus has grown well past the original 2 test rulings,
-            # and ruling-specific questions (which don't benefit from the statute
-            # boost below) need more room to find the right case among many similar ones
-NUM_CTX = 8192   # Ollama defaults to 2048 for most models — far too small once retrieved
-                 # context grows with a bigger corpus. Silent truncation at 2048 was the
-                 # root cause of the calc_01/06/07 regression: front-loaded Question/
-                 # VERIFIED CALCULATION content was getting dropped. Raise further if you
-                 # still see the model answering something unrelated to the question —
-                 # check `ollama show <model>` for that model's actual max context first.
-CONTEXT_SNIPPET_CHARS = 2200  # chunks are built at CHUNK_SIZE_CHARS=1800 in chunk.py, so
-                              # this must stay above that or it silently truncates *normal*
-                              # chunks mid-sentence — which is exactly what an earlier,
-                              # too-aggressive 800-char cap did here (see the statute_01/
-                              # statute_02 regression: retrieval was correct, but the
-                              # answer-bearing sentence fell past char 800 and got cut).
-                              # This is a guard against outliers (e.g. oversized fee-table
-                              # chunks), not a routine truncator — 5 chunks at 2200 chars
-                              # (~2750 tokens) is still comfortably under NUM_CTX.
+GENERATION_MODEL_NAME = "llama-3.1-8b-instant"  # fast free-tier model; swap e.g. "llama-3.3-70b-versatile"
+TOP_K = 10
+# Groq models (Llama 3.1 8B / 3.3 70B) support large context natively (~131k).
+# We no longer pass num_ctx; instead we keep CONTEXT_SNIPPET_CHARS so the prompt stays reasonable.
+CONTEXT_SNIPPET_CHARS = 2200
 
 SYSTEM_PROMPT = """You are a legal research assistant specializing in advocate remuneration \
 under Kenya's Advocates Remuneration Order and related case law. Answer the user's question \
@@ -79,18 +66,20 @@ class RagPipeline:
         self.embedding_model = SentenceTransformer(embedding_model_name, device="cpu")
         self.generation_model_name = generation_model_name
 
+        api_key = os.environ.get("GROQ_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "GROQ_API_KEY is not set. Get a free key at https://console.groq.com/keys "
+                "and export it (or add it to Streamlit secrets)."
+            )
+        self.groq_client = Groq(api_key=api_key)
+
         client = chromadb.PersistentClient(path=chroma_dir)
         self.collection = client.get_collection(collection_name)
         self._build_bm25_index()
 
     def _build_bm25_index(self) -> None:
-        """Pull every chunk already in Chroma and build a BM25 keyword index over it.
-        Why: dense embeddings under-serve short, distinctive phrases ("fourteen
-        days", a specific case name) once the corpus is large enough that many
-        chunks are semantically similar — BM25's exact/near-exact term matching
-        catches these where pure semantic distance ranks them too low to surface
-        in the top-k. Rebuilt from Chroma directly (not re-reading chunks.jsonl)
-        so it's always in sync with whatever's actually indexed."""
+        """Pull every chunk already in Chroma and build a BM25 keyword index over it."""
         all_data = self.collection.get(include=["documents", "metadatas"])
         self._bm25_ids = all_data["ids"]
         self._bm25_documents = all_data["documents"]
@@ -109,7 +98,7 @@ class RagPipeline:
         chunks = []
         for idx in top_indices:
             if scores[idx] <= 0:
-                continue  # no keyword overlap at all — don't force in irrelevant results
+                continue
             meta = self._bm25_metadatas[idx]
             chunks.append({
                 "chunk_id": self._bm25_ids[idx],
@@ -127,7 +116,6 @@ class RagPipeline:
         return chunks
 
     def _query_collection(self, query_embedding, n_results: int, where: dict | None = None) -> list[dict]:
-        """Low-level Chroma query, returned as a list of chunk dicts."""
         kwargs = {"query_embeddings": query_embedding.tolist(), "n_results": n_results}
         if where is not None:
             kwargs["where"] = where
@@ -154,15 +142,6 @@ class RagPipeline:
         return chunks
 
     def retrieve(self, query: str, top_k: int = TOP_K, statute_boost: int = 3, bm25_k: int = 5) -> list[dict]:
-        """Hybrid retrieval: dense semantic search (top_k) + a guaranteed statute-only
-        slice (statute_boost) + BM25 keyword search (bm25_k), combined via reciprocal
-        rank fusion (RRF). Each method catches what the others miss: semantic search
-        finds paraphrased/conceptual matches; the statute boost guarantees the Order's
-        own ~150 chunks aren't drowned out by a much larger ruling corpus; BM25 finds
-        exact short phrases ("fourteen days", a specific case name) that dense
-        embeddings under-rank once many chunks are semantically similar.
-        RRF avoids needing to normalize BM25 scores against cosine distances — it
-        only uses each method's RANK, which is directly comparable across methods."""
         query_with_instruction = f"Represent this sentence for searching relevant passages: {query}"
         query_embedding = self.embedding_model.encode([query_with_instruction], normalize_embeddings=True)
 
@@ -170,14 +149,14 @@ class RagPipeline:
         statute_chunks = self._query_collection(query_embedding, n_results=statute_boost, where={"doc_type": "statute"})
         bm25_chunks = self._bm25_search(query, n_results=bm25_k)
 
-        rrf_k = 60  # standard RRF damping constant
+        rrf_k = 60
         rrf_scores: dict[str, float] = {}
         chunk_by_id: dict[str, dict] = {}
         for ranked_list in (statute_chunks, general_chunks, bm25_chunks):
             for rank, chunk in enumerate(ranked_list):
                 cid = chunk["chunk_id"]
                 rrf_scores[cid] = rrf_scores.get(cid, 0.0) + 1.0 / (rrf_k + rank)
-                chunk_by_id.setdefault(cid, chunk)  # keep first-seen version (has full metadata either way)
+                chunk_by_id.setdefault(cid, chunk)
 
         merged_ids = sorted(rrf_scores, key=lambda cid: rrf_scores[cid], reverse=True)
         return [chunk_by_id[cid] for cid in merged_ids[: top_k + statute_boost]]
@@ -190,8 +169,6 @@ class RagPipeline:
                 if chunk["doc_type"] == "statute"
                 else f"{chunk['case_citation']} / {chunk['case_number']} / {chunk['court']} / dated {chunk['ruling_date']}"
             )
-            # Cap length per chunk — with a larger corpus, TOP_K chunks at full length
-            # can still blow the context budget even with NUM_CTX raised.
             snippet = chunk["text"][:CONTEXT_SNIPPET_CHARS]
             parts.append(
                 f"[chunk_id: {chunk['chunk_id']}] (source: {source_label} / section: {chunk['section']})\n{snippet}"
@@ -209,11 +186,6 @@ class RagPipeline:
                 f"{calculator_result.explanation}\n"
                 f"[source: {calculator_result.schedule_citation}]"
             )
-            # Question + calc block appear at BOTH ends of the message: if a context
-            # window limit ever truncates one end (front or back, depending on the
-            # runtime), the other copy still gets through. This is what actually
-            # protects against the calc_01/06/07 regression — reordering alone
-            # doesn't, since truncation direction isn't something this code controls.
             user_message = (
                 f"Question: {query}\n\n"
                 f"{calc_block}\n\n"
@@ -226,21 +198,18 @@ class RagPipeline:
         else:
             user_message = f"Context:\n{context_block}\n\nQuestion: {query}"
 
-        response = ollama.chat(
+        response = self.groq_client.chat.completions.create(
             model=self.generation_model_name,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_message},
             ],
-            options={"num_ctx": NUM_CTX},
+            temperature=0.1,          # low for legal precision
+            max_tokens=2048,          # enough for a concise legal answer
         )
-        return response["message"]["content"]
+        return response.choices[0].message.content
 
     def answer(self, query: str, top_k: int = TOP_K) -> dict:
-        """Full pipeline: try the fee calculator router first (exact figures for
-        computable questions), then retrieve + generate either way — for a routed
-        question, retrieval only supplies supporting citations; the LLM is told
-        the verified figure and must not alter it."""
         route_result = fee_router.route(query)
         retrieved_chunks = self.retrieve(query, top_k=top_k)
 
@@ -253,14 +222,14 @@ class RagPipeline:
             "query": query,
             "answer": answer_text,
             "retrieved_chunks": retrieved_chunks,
-            "calculator_result": route_result,  # None if the router didn't classify this query
+            "calculator_result": route_result,
         }
 
 
 if __name__ == "__main__":
     pipeline = RagPipeline()
 
-    print(f"RAG pipeline ready (generation model: {GENERATION_MODEL_NAME}). Type 'exit' to quit.\n")
+    print(f"RAG pipeline ready (generation model: {GENERATION_MODEL_NAME} via Groq). Type 'exit' to quit.\n")
     while True:
         user_query = input("Question: ").strip()
         if user_query.lower() in {"exit", "quit"}:
