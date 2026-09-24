@@ -10,7 +10,7 @@ Requires: `pip install groq chromadb sentence-transformers rank-bm25`
 
 import os
 import re
-
+from pathlib import Path
 import chromadb
 from groq import Groq
 from rank_bm25 import BM25Okapi
@@ -18,7 +18,7 @@ from sentence_transformers import SentenceTransformer
 
 import fee_router
 
-CHROMA_DIR = "./chroma_db"
+CHROMA_DIR =  str(Path(__file__).resolve().parent / "chroma_db")
 COLLECTION_NAME = "policy_docs"
 EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"
 GENERATION_MODEL_NAME = "llama-3.1-8b-instant"  # fast free-tier model; swap e.g. "llama-3.3-70b-versatile"
@@ -75,6 +75,14 @@ class RagPipeline:
         self.groq_client = Groq(api_key=api_key)
 
         client = chromadb.PersistentClient(path=chroma_dir)
+        
+        existing = [c.name for c in client.list_collections()]
+        if collection_name not in existing:
+            raise RuntimeError(
+                        f"Chroma collection '{collection_name}' not found in '{chroma_dir}'. "
+                        f"Available: {existing}. "
+                        "Did you push the chroma_db/ folder to GitHub?"
+                    )
         self.collection = client.get_collection(collection_name)
         self._build_bm25_index()
 
