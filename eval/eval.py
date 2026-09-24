@@ -11,17 +11,17 @@ Scores:
 Writes: eval/results.csv (per-question) + prints an aggregate summary.
 
 Run from the project root: `python eval/eval.py`
+
+Requires GROQ_API_KEY in the environment (or .env) because RagPipeline now uses Groq.
 """
 
 import csv
 import json
-import os
 import re
 import sys
 from pathlib import Path
-
 from dotenv import load_dotenv
-import ollama
+from langchain_openai import ChatOpenAI
 
 load_dotenv()
 
@@ -30,13 +30,7 @@ from rag_pipeline import RagPipeline
 
 QA_PATH = Path(__file__).parent / "qa_pairs.jsonl"
 RESULTS_PATH = Path(__file__).parent / "results.csv"
-
-# Default is the free, local, zero-config judge — `git clone && python eval.py`
-# works for anyone with no API key. Set the JUDGE_MODEL env var (e.g. in your own
-# untracked .env, never committed) to opt into a paid frontier judge instead —
-# e.g. JUDGE_MODEL=gpt-5.4-mini. See README for why this is worth doing: the two
-# judges disagreed noticeably on several questions in this project's own eval runs.
-JUDGE_MODEL_NAME = os.environ.get("JUDGE_MODEL", "qwen2.5:7b")
+JUDGE_MODEL = ChatOpenAI(model="gpt-5.4-mini", reasoning_effort="low")  # can differ from the pipeline's generation model
 
 CITED_CHUNK_ID_PATTERN = re.compile(r"chunk_id:\s*([^\]]+)")
 
@@ -137,7 +131,7 @@ def check_answer_states_figure(qa: dict, answer_text: str) -> bool | None:
         return None
     expected_str = f"{qa['expected_value']:,.0f}"
     # accept with or without comma-grouping, with or without decimals
-    pattern = re.escape(expected_str).replace(r"\,", ",?") 
+    pattern = re.escape(expected_str).replace(r"\,", ",?")
     return bool(re.search(pattern, answer_text)) or str(int(qa["expected_value"])) in answer_text.replace(",", "")
 
 
@@ -158,20 +152,6 @@ def build_judge_context(retrieved_chunks: list[dict], calculator_result=None, ma
     return "\n\n".join(parts) if parts else "(no context retrieved)"
 
 
-def _call_judge(prompt: str) -> str:
-    """Route to Ollama for local models (the free default), or ChatOpenAI for
-    anything else (e.g. gpt-5.4-mini) — only imports/needs an API key when a
-    non-local judge is actually requested via the JUDGE_MODEL env var."""
-    if JUDGE_MODEL_NAME.startswith("gpt-"):
-        from langchain_openai import ChatOpenAI
-        judge = ChatOpenAI(model=JUDGE_MODEL_NAME, reasoning_effort="low")
-        response = judge.invoke(prompt)
-        return response.content
-    else:
-        response = ollama.chat(model=JUDGE_MODEL_NAME, messages=[{"role": "user", "content": prompt}])
-        return response["message"]["content"]
-
-
 def judge_faithfulness(question: str, answer: str, context_summary: str) -> tuple[int, str]:
     """LLM-as-judge: is the answer fully supported by the context it was given?
     Returns (score 1-5, reasoning). Falls back to (0, error) if the judge's
@@ -188,7 +168,8 @@ response to a question with no relevant context should score 5, not 1.
 
 Respond with ONLY a JSON object, no other text: {{"score": <int 1-5>, "reasoning": "<one sentence>"}}"""
 
-    raw = _call_judge(judge_prompt).strip()
+    response = JUDGE_MODEL.invoke(judge_prompt)
+    raw = response.content
     raw = re.sub(r"^```json\s*|\s*```$", "", raw.strip())  # strip markdown fences if the judge adds them
 
     try:
@@ -201,7 +182,6 @@ Respond with ONLY a JSON object, no other text: {{"score": <int 1-5>, "reasoning
 def run_eval():
     pipeline = RagPipeline()
     qa_pairs = load_qa_pairs(QA_PATH)
-
     rows = []
     for qa in qa_pairs:
         print(f"Running {qa['id']}: {qa['question'][:70]}...")
