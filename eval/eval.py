@@ -20,7 +20,10 @@ import re
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
 import ollama
+
+load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so `import rag_pipeline` works when run as eval/eval.py
 from rag_pipeline import RagPipeline
