@@ -12,7 +12,7 @@ import os
 import re
 from pathlib import Path
 import chromadb
-from groq import Groq
+from groq import Groq, APIError, RateLimitError, AuthenticationError
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
@@ -206,16 +206,30 @@ class RagPipeline:
         else:
             user_message = f"Context:\n{context_block}\n\nQuestion: {query}"
 
-        response = self.groq_client.chat.completions.create(
+        try:
+          response = self.groq_client.chat.completions.create(
             model=self.generation_model_name,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_message},
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_message},
             ],
-            temperature=0.1,          # low for legal precision
-            max_tokens=2048,          # enough for a concise legal answer
-        )
-        return response.choices[0].message.content
+            temperature=0.1,
+            max_tokens=2048,
+    )
+          return response.choices[0].message.content
+
+        except AuthenticationError as e:
+           raise RuntimeError(
+           "Groq authentication failed. Check that GROQ_API_KEY is set correctly "
+           "in Streamlit Cloud → App settings → Secrets."
+          ) from e
+        except RateLimitError as e:
+           raise RuntimeError(
+           "Groq rate limit hit. Wait a minute and try again (free tier limits)."
+          ) from e
+        except APIError as e:
+            raise RuntimeError(f"Groq API error: {e.message} (status={e.status_code})") from e
+            
 
     def answer(self, query: str, top_k: int = TOP_K) -> dict:
         route_result = fee_router.route(query)
