@@ -8,3 +8,4 @@ ollama
 streamlit
 pandas
 python-dotenv
+groq
