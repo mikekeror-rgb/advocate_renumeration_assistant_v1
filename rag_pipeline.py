@@ -9,10 +9,11 @@ Requires: `pip install groq chromadb sentence-transformers rank-bm25`
 """
 
 import os
+import time
 import re
 from pathlib import Path
 import chromadb
-from groq import Groq, APIError, RateLimitError, AuthenticationError
+from groq import Groq, APIError, RateLimitError, AuthenticationError, APIStatusError
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 
@@ -22,10 +23,10 @@ CHROMA_DIR =  str(Path(__file__).resolve().parent / "chroma_db")
 COLLECTION_NAME = "policy_docs"
 EMBEDDING_MODEL_NAME = "BAAI/bge-small-en-v1.5"
 GENERATION_MODEL_NAME = "openai/gpt-oss-20b" # fast free-tier model; swap e.g. "llama-3.3-70b-versatile"
-TOP_K = 10
+TOP_K = 5
 # Groq models (Llama 3.1 8B / 3.3 70B) support large context natively (~131k).
 # We no longer pass num_ctx; instead we keep CONTEXT_SNIPPET_CHARS so the prompt stays reasonable.
-CONTEXT_SNIPPET_CHARS = 2200
+CONTEXT_SNIPPET_CHARS = 1000
 
 SYSTEM_PROMPT = """You are a legal research assistant specializing in advocate remuneration \
 under Kenya's Advocates Remuneration Order and related case law. Answer the user's question \
@@ -149,7 +150,7 @@ class RagPipeline:
             })
         return chunks
 
-    def retrieve(self, query: str, top_k: int = TOP_K, statute_boost: int = 3, bm25_k: int = 5) -> list[dict]:
+    def retrieve(self, query: str, top_k: int = TOP_K, statute_boost: int = 2, bm25_k: int = 3) -> list[dict]:
         query_with_instruction = f"Represent this sentence for searching relevant passages: {query}"
         query_embedding = self.embedding_model.encode([query_with_instruction], normalize_embeddings=True)
 
@@ -184,53 +185,71 @@ class RagPipeline:
         return "\n\n---\n\n".join(parts)
 
     def generate(self, query: str, retrieved_chunks: list[dict], calculator_result=None) -> str:
-        context_block = self.build_context_block(retrieved_chunks)
+         context_block = self.build_context_block(retrieved_chunks)
 
-        if calculator_result is not None:
-            calc_block = (
-                f"VERIFIED CALCULATION (this is your answer's basis — computed exactly from the Order's "
-                f"schedule formula; state this figure precisely, do not recompute, round differently, "
-                f"alter it, or say the question is not covered):\n"
-                f"{calculator_result.explanation}\n"
-                f"[source: {calculator_result.schedule_citation}]"
+         if calculator_result is not None:
+                calc_block = (
+                    f"VERIFIED CALCULATION (this is your answer's basis — computed exactly from the Order's "
+                    f"schedule formula; state this figure precisely, do not recompute, round differently, "
+                    f"alter it, or say the question is not covered):\n"
+                    f"{calculator_result.explanation}\n"
+                    f"[source: {calculator_result.schedule_citation}]"
+                )
+                user_message = (
+                    f"Question: {query}\n\n"
+                    f"{calc_block}\n\n"
+                    f"Additional citations below are supplementary only — they do not override the "
+                    f"VERIFIED CALCULATION above:\n{context_block}\n\n"
+                    f"---\n"
+                    f"Reminder — Question: {query}\n"
+                    f"Reminder — {calc_block}"
+                )
+         else:
+                user_message = f"Context:\n{context_block}\n\nQuestion: {query}"
+
+         last_error = None
+         for attempt in range(4):
+                try:
+                    response = self.groq_client.chat.completions.create(
+                        model=self.generation_model_name,  # should be "openai/gpt-oss-20b"
+                        messages=[
+                            {"role": "system", "content": SYSTEM_PROMPT},
+                            {"role": "user", "content": user_message},
+                        ],
+                        temperature=0.1,
+                        max_tokens=1024,
+                    )
+                    return response.choices[0].message.content
+
+                except RateLimitError as e:
+                    last_error = e
+                    time.sleep(15 * (attempt + 1))  # 15s, 30s, 45s, 60s
+                except APIStatusError as e:
+                    if getattr(e, "status_code", None) == 429:
+                        last_error = e
+                        time.sleep(15 * (attempt + 1))
+                    else:
+                        details = {
+                            "type": type(e).__name__,
+                            "message": getattr(e, "message", str(e)),
+                            "status_code": getattr(e, "status_code", None),
+                            "body": getattr(e, "body", None),
+                            "model": self.generation_model_name,
+                        }
+                        raise RuntimeError(f"GROQ FULL ERROR: {details}") from e
+                except Exception as e:
+                    details = {
+                        "type": type(e).__name__,
+                        "message": getattr(e, "message", str(e)),
+                        "status_code": getattr(e, "status_code", None),
+                        "body": getattr(e, "body", None),
+                        "model": self.generation_model_name,
+                    }
+                    raise RuntimeError(f"GROQ FULL ERROR: {details}") from e
+
+         raise RuntimeError(
+                f"Groq rate/token limit after retries. Try again in a minute. Last error: {last_error}"
             )
-            user_message = (
-                f"Question: {query}\n\n"
-                f"{calc_block}\n\n"
-                f"Additional citations below are supplementary only — they do not override the "
-                f"VERIFIED CALCULATION above:\n{context_block}\n\n"
-                f"---\n"
-                f"Reminder — Question: {query}\n"
-                f"Reminder — {calc_block}"
-            )
-        else:
-            user_message = f"Context:\n{context_block}\n\nQuestion: {query}"
-
-        try:
-          response = self.groq_client.chat.completions.create(
-            model=self.generation_model_name,
-            messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
-            ],
-            temperature=0.1,
-            max_tokens=2048,
-    )
-          return response.choices[0].message.content
-
-        except AuthenticationError as e:
-           raise RuntimeError(
-           "Groq authentication failed. Check that GROQ_API_KEY is set correctly "
-           "in Streamlit Cloud → App settings → Secrets."
-          ) from e
-        except RateLimitError as e:
-           raise RuntimeError(
-           "Groq rate limit hit. Wait a minute and try again (free tier limits)."
-          ) from e
-        except APIError as e:
-            raise RuntimeError(f"Groq API error: {e.message} (status={e.status_code})") from e
-            
-
     def answer(self, query: str, top_k: int = TOP_K) -> dict:
         route_result = fee_router.route(query)
         retrieved_chunks = self.retrieve(query, top_k=top_k)
