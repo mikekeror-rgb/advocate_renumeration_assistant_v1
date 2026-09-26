@@ -57,6 +57,22 @@ def extract_amount(text: str) -> float | None:
 # Scenario classification
 # ---------------------------------------------------------------------------
 
+_BILL_WORDS = re.compile(
+    r"\bbill of costs|prepare a bill|itemi[sz]ed bill|draw(?:ing)? a bill|full bill|total bill\b",
+    re.IGNORECASE,
+)
+# Secondary signal: mentioning several distinct bill LINE ITEMS together implies
+# wanting the itemized breakdown even without ever saying "bill of costs" —
+# confirmed necessary by a real question that named nearly every component
+# (letters, service, attendances, filing fees, disbursements) but never used
+# any of the literal trigger phrases above, and got routed to a single-figure
+# answer instead of the itemized one actually being asked for.
+_BILL_COMPONENT_WORDS = re.compile(
+    r"\bletters?\b|\bservice of documents\b|\battendances?\b|\bfiling fees?\b|"
+    r"\bdisbursements?\b|\bprofessional fees?\b|\bgetting.up\b",
+    re.IGNORECASE,
+)
+_BILL_COMPONENT_THRESHOLD = 2  # require 2+ distinct component mentions, not just 1
 _DISCHARGE_WORDS = re.compile(r"\bdischarg|reconvey|reassign|redemption\b", re.IGNORECASE)
 _SECURITY_WORDS = re.compile(r"\bmortgage|charge|security|debenture\b", re.IGNORECASE)
 _SALE_WORDS = re.compile(r"\bsale|purchase|sell|buy|conveyanc|land|property\b", re.IGNORECASE)
@@ -67,6 +83,13 @@ _HIGHCOURT_INSTRUCTION_WORDS = re.compile(
 
 
 def classify_scenario(text: str) -> str | None:
+    component_mentions = len(set(m.group(0).lower() for m in _BILL_COMPONENT_WORDS.finditer(text)))
+    if _BILL_WORDS.search(text) or component_mentions >= _BILL_COMPONENT_THRESHOLD:
+        # Checked first: "prepare a bill of costs for a defended High Court
+        # suit" also matches _HIGHCOURT_INSTRUCTION_WORDS below, but a full
+        # itemized bill is a different, more specific request than a single
+        # instruction-fee lookup.
+        return "schedule6_full_bill"
     if _DISCHARGE_WORDS.search(text) and _SECURITY_WORDS.search(text):
         return "schedule1_second_scale_discharge"
     if _SUBORDINATE_WORDS.search(text):
@@ -101,9 +124,9 @@ def _extract_undertaking(text: str) -> bool:
 
 
 def _extract_defended(text: str) -> bool | None:
-    if re.search(r"\bundefended|unopposed|no denial|not defended\b", text, re.IGNORECASE):
+    if re.search(r"\bundefended|unopposed|no denial|not defended|no defen[cs]e|without (?:a )?defen[cs]e\b", text, re.IGNORECASE):
         return False
-    if re.search(r"\bdefended|denial of liability|contested|opposed\b", text, re.IGNORECASE):
+    if re.search(r"\bdefended|denial of liability|contested|opposed|defen[cs]e\b", text, re.IGNORECASE):
         return True
     return None  # ambiguous — caller should surface both figures
 
@@ -114,6 +137,23 @@ def _extract_scale(text: str) -> str | None:
     if re.search(r"\bhigher scale|defended|contested\b", text, re.IGNORECASE):
         return "higher"
     return None  # ambiguous
+
+
+def _extract_count(text: str, pattern: str) -> int:
+    match = re.search(pattern, text, re.IGNORECASE)
+    return int(match.group(1)) if match else 0
+
+
+def _extract_disbursement(text: str, label_pattern: str) -> float | None:
+    """Look for '<label> ... <amount>' — e.g. 'service 8000' or 'filing fees
+    of Kshs 25,000'. Returns None (not 0) when absent, so the bill correctly
+    shows '—' rather than implying a confirmed zero-cost disbursement."""
+    match = re.search(
+        r"(?:" + label_pattern + r")[^\d]{0,15}(?:kshs?\.?|ksh\.?)?\s*"
+        r"([\d]{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)",
+        text, re.IGNORECASE,
+    )
+    return float(match.group(1).replace(",", "")) if match else None
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +181,49 @@ def route(text: str) -> RouteResult | None:
     amount = extract_amount(text)
     if amount is None:
         return None  # classified but no usable figure — let the LLM ask a clarifying question
+
+    if scenario == "schedule6_full_bill":
+        defended = _extract_defended(text)
+        if defended is None:
+            defended = True  # bills are usually prepared for the harder (defended) case by default
+
+        letters_to_advocate = _extract_count(text, r"(\d+)\s*letters?\s*(?:to|for)\s*(?:the\s*)?(?:opposing\s*)?(?:advocate|counsel)")
+        letters_to_client = _extract_count(text, r"(\d+)\s*letters?\s*(?:to|for)\s*(?:the\s*)?client")
+        mentions = _extract_count(text, r"(\d+)\s*mentions?")
+        hearings = _extract_count(text, r"(\d+)\s*hearing")
+
+        disbursements = {}
+        service_amt = _extract_disbursement(text, r"service(?:\s*of\s*documents)?")
+        filing_amt = _extract_disbursement(text, r"(?:court\s*)?filing\s*fees?")
+        photocopy_amt = _extract_disbursement(text, r"photocopy(?:ing)?|printing")
+        if service_amt is not None:
+            disbursements["Service of documents"] = service_amt
+        if filing_amt is not None:
+            disbursements["Court filing fees"] = filing_amt
+        if photocopy_amt is not None:
+            disbursements["Photocopying/printing"] = photocopy_amt
+
+        bill = fc.generate_high_court_bill(
+            amount, defended=defended,
+            letters_to_advocate=letters_to_advocate,
+            letters_to_client=letters_to_client,
+            mentions=mentions,
+            hearings=hearings,
+            disbursements=disbursements or None,
+            advocate_client=bool(re.search(r"advocate\s*[-–—/ ]\s*client|advocate and client|own client", text, re.IGNORECASE)),
+        )
+        return RouteResult(
+            scenario=scenario, amount=amount,
+            modifiers={
+                "defended": defended, "letters_to_advocate": letters_to_advocate,
+                "letters_to_client": letters_to_client, "mentions": mentions, "hearings": hearings,
+                "disbursements": disbursements,
+            },
+            fee=bill.total,
+            explanation=fc.format_bill_as_markdown(bill),
+            schedule_citation="Advocates Remuneration Order, Schedule 6, Part A (instruction fee, "
+                               "getting-up fee, correspondence, attendances) — VAT per current tax law, not the Order itself",
+        )
 
     if scenario == "schedule1_second_scale_discharge":
         party = _extract_party(text)

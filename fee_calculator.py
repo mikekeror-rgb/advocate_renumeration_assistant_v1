@@ -238,6 +238,226 @@ def schedule7_instruction_fee(value: float, scale: str = "lower") -> float:
 
 
 # ---------------------------------------------------------------------------
+# Full itemized bill of costs (Schedule 6 — High Court)
+# ---------------------------------------------------------------------------
+
+# Schedule 6, Part A rates (Advocates Remuneration Order, as revised to 2022)
+PLEADING_BASE_RATE = 1_100      # item 4(a)(i): pleading of four folios or less
+PLEADING_EXTRA_FOLIO = 150      # item 4(a)(ii): each folio after the first four
+OTHER_DRAWING_FOLIO = 180       # item 4(d): all other necessary documents, per folio
+PERUSAL_FOLIO = 50              # item 8(a): perusals, per folio
+LETTER_RATE = 1_000             # item 6(a): letters before action / other necessary letters
+MENTION_RATE = 1_000            # item 7(c): attendance at court on a fixed date / calling lists
+HEARING_DAY_RATE = 10_000       # item 7(d): attendance before judge, whole day (ordinary scale)
+ADVOCATE_CLIENT_UPLIFT = 0.50   # Part B: Part A fees increased by 50%
+
+
+@dataclass
+class BillLineItem:
+    item: str
+    calculation_note: str
+    amount: float | None   # None displays as "—" — case-specific input not provided
+    classification: str    # "Professional fee" | "Disbursement"
+    basis: str = ""        # the Order provision (or other law) the item is charged under
+
+
+@dataclass
+class BillOfCosts:
+    matter: str
+    subject_matter_value: float
+    applicable_scale: str
+    line_items: list[BillLineItem]
+    vat_rate: float
+
+    @property
+    def professional_fee_subtotal(self) -> float:
+        return sum(li.amount or 0 for li in self.line_items if li.classification == "Professional fee")
+
+    @property
+    def disbursement_subtotal(self) -> float:
+        return sum(li.amount or 0 for li in self.line_items if li.classification == "Disbursement")
+
+    @property
+    def subtotal(self) -> float:
+        return round(self.professional_fee_subtotal + self.disbursement_subtotal, 2)
+
+    @property
+    def vat_amount(self) -> float:
+        # VAT applies to taxable professional fees only, not disbursements —
+        # disbursements are pass-through actual costs, not the advocate's own
+        # taxable supply, under standard Kenyan VAT treatment of legal services.
+        return round(self.professional_fee_subtotal * self.vat_rate, 2)
+
+    @property
+    def total(self) -> float:
+        return round(self.subtotal + self.vat_amount, 2)
+
+
+def pleading_drawing_fee(folios: int) -> float:
+    """Schedule 6 item 4(a): Kshs 1,100 for a pleading of up to four folios,
+    plus Kshs 150 for each folio beyond the first four."""
+    if folios <= 0:
+        return 0.0
+    return PLEADING_BASE_RATE + max(folios - 4, 0) * PLEADING_EXTRA_FOLIO
+
+
+def generate_high_court_bill(
+    subject_matter_value: float,
+    defended: bool,
+    letters_to_advocate: int = 0,
+    letters_to_client: int = 0,
+    mentions: int = 0,
+    hearings: int = 0,
+    disbursements: dict[str, float] | None = None,
+    vat_rate: float = 0.16,
+    pleading_folios: list[int] | None = None,
+    other_drawing_folios: int = 0,
+    perusal_folios: int = 0,
+    advocate_client: bool = False,
+) -> BillOfCosts:
+    """
+    Assemble a full itemized High Court bill of costs under Schedule 6.
+
+    Only the instruction fee and getting-up fee are pure formula on
+    subject_matter_value. Everything else needs case-specific counts the
+    user supplies — the Order prescribes a PER-ITEM rate but can't know how
+    many letters, folios or hearings there were in a given matter. Items
+    left at zero/None still appear in the table as "—" with their rate, so
+    the bill shows what's still needed rather than silently dropping it.
+
+    advocate_client=True applies Schedule 6, Part B: the Part A professional
+    fees increased by 50% (disbursements are not uplifted).
+
+    VAT defaults to 16% on professional fees only. VAT is set by the VAT Act,
+    not the Order, and can change independently of it — confirm the rate.
+    """
+    instruction_fee = schedule6_instruction_fee(subject_matter_value, defended=defended)
+    getting_up_fee = round(instruction_fee / 3, 2)
+
+    PF = "Professional fee"
+    line_items = [
+        BillLineItem("Instruction fee", f"Tariff calculation on Kshs {subject_matter_value:,.0f}",
+                     instruction_fee, PF, f"Sch. 6 Part A item 1({'b' if defended else 'a'})"),
+        BillLineItem("Getting-up fee", "1/3 of instruction fee", getting_up_fee, PF,
+                     "Sch. 6 Part A item 2"),
+    ]
+
+    # --- drawing and perusals (charged per folio of 100 words, para 17) ---
+    if pleading_folios:
+        docs = [f for f in pleading_folios if f > 0]
+        amount = sum(pleading_drawing_fee(f) for f in docs)
+        note = f"{len(docs)} pleading(s) of {', '.join(str(f) for f in docs)} folios — Kshs 1,100 up to 4 folios + Kshs 150/extra folio"
+        line_items.append(BillLineItem("Drawing pleadings", note, amount, PF, "Sch. 6 Part A item 4(a)"))
+    else:
+        line_items.append(BillLineItem("Drawing pleadings",
+                                       "folio counts not provided — Kshs 1,100 up to 4 folios + Kshs 150/extra folio",
+                                       None, PF, "Sch. 6 Part A item 4(a)"))
+
+    if other_drawing_folios:
+        line_items.append(BillLineItem("Drawing other documents",
+                                       f"{other_drawing_folios} folios × Kshs {OTHER_DRAWING_FOLIO}",
+                                       other_drawing_folios * OTHER_DRAWING_FOLIO, PF, "Sch. 6 Part A item 4(d)"))
+    else:
+        line_items.append(BillLineItem("Drawing other documents",
+                                       f"folio count not provided — Kshs {OTHER_DRAWING_FOLIO} per folio",
+                                       None, PF, "Sch. 6 Part A item 4(d)"))
+
+    if perusal_folios:
+        line_items.append(BillLineItem("Perusals", f"{perusal_folios} folios × Kshs {PERUSAL_FOLIO}",
+                                       perusal_folios * PERUSAL_FOLIO, PF, "Sch. 6 Part A item 8(a)"))
+    else:
+        line_items.append(BillLineItem("Perusals", f"folio count not provided — Kshs {PERUSAL_FOLIO} per folio",
+                                       None, PF, "Sch. 6 Part A item 8(a)"))
+
+    # --- correspondence ---
+    for label, count in (("Letters to opposing advocate", letters_to_advocate),
+                         ("Letters to client", letters_to_client)):
+        if count:
+            line_items.append(BillLineItem(label, f"{count} letters × Kshs {LETTER_RATE:,}",
+                                           count * LETTER_RATE, PF, "Sch. 6 Part A item 6(a)"))
+        else:
+            line_items.append(BillLineItem(label, f"count not provided — Kshs {LETTER_RATE:,} per letter",
+                                           None, PF, "Sch. 6 Part A item 6(a)"))
+
+    # --- attendances ---
+    if mentions or hearings:
+        parts, amount = [], 0.0
+        if mentions:
+            parts.append(f"{mentions} mention(s) × Kshs {MENTION_RATE:,}")
+            amount += mentions * MENTION_RATE
+        if hearings:
+            parts.append(f"{hearings} hearing day(s) × Kshs {HEARING_DAY_RATE:,}")
+            amount += hearings * HEARING_DAY_RATE
+        line_items.append(BillLineItem("Court attendances", " + ".join(parts), amount, PF,
+                                       "Sch. 6 Part A items 7(c), 7(d)"))
+    else:
+        line_items.append(BillLineItem("Court attendances",
+                                       f"count not provided — Kshs {MENTION_RATE:,} per mention / Kshs {HEARING_DAY_RATE:,} per hearing day",
+                                       None, PF, "Sch. 6 Part A items 7(c), 7(d)"))
+
+    # --- advocate-client uplift (computed on the Part A professional fees above) ---
+    if advocate_client:
+        part_a_fees = sum(li.amount or 0 for li in line_items if li.classification == PF)
+        line_items.append(BillLineItem("Advocate-client uplift", "50% of Part A professional fees",
+                                       round(part_a_fees * ADVOCATE_CLIENT_UPLIFT, 2), PF,
+                                       "Sch. 6 Part B"))
+
+    # --- disbursements (actual costs — vouchers producible on taxation, para 74) ---
+    DISBURSEMENT_BASIS = {
+        "Service of documents": "Sch. 6 item 9 (Kshs 1,400 within 3 km + Kshs 35/km + actual travel)",
+        "Court filing fees": "Actual court fees paid (para 74)",
+        "Photocopying/printing": "Sch. 6 item 5(d) (actual cost, vouched)",
+    }
+    disbursements = disbursements or {}
+    for label, basis in DISBURSEMENT_BASIS.items():
+        if label in disbursements:
+            line_items.append(BillLineItem(label, "Actual allowable expense", disbursements[label], "Disbursement", basis))
+        else:
+            line_items.append(BillLineItem(label, "actual amount not provided", None, "Disbursement", basis))
+    for label, amt in disbursements.items():
+        if label not in DISBURSEMENT_BASIS:
+            line_items.append(BillLineItem(label, "Actual allowable expense", amt, "Disbursement",
+                                           "Actual cost, vouched (para 74)"))
+
+    bill_type = "Advocate-client" if advocate_client else "Party and party"
+    matter = f"{'Defended' if defended else 'Undefended'} High Court suit ({bill_type.lower()} costs)"
+    scale_word = "defended contentious" if defended else "undefended"
+    applicable_scale = f"High Court — {scale_word} matter, Schedule 6 Part {'A + B' if advocate_client else 'A'}"
+
+    return BillOfCosts(
+        matter=matter,
+        subject_matter_value=subject_matter_value,
+        applicable_scale=applicable_scale,
+        line_items=line_items,
+        vat_rate=vat_rate,
+    )
+
+
+def format_bill_as_markdown(bill: BillOfCosts) -> str:
+    def fmt(amount):
+        return f"{amount:,.2f}" if amount is not None else "—"
+
+    lines = [
+        f"**Matter:** {bill.matter}",
+        f"**Subject matter:** KSh {bill.subject_matter_value:,.0f}",
+        f"**Applicable scale:** {bill.applicable_scale}",
+        "",
+        "| Item | Calculation | Basis | Amount (KSh) | Classification |",
+        "|---|---|---|---|---|",
+    ]
+    for li in bill.line_items:
+        lines.append(f"| {li.item} | {li.calculation_note} | {li.basis} | {fmt(li.amount)} | {li.classification} |")
+
+    lines.append(f"| **Professional fees** | | | **{fmt(bill.professional_fee_subtotal)}** | |")
+    lines.append(f"| **Disbursements** | | | **{fmt(bill.disbursement_subtotal)}** | |")
+    lines.append(f"| **Subtotal** | | | **{fmt(bill.subtotal)}** | |")
+    lines.append(f"| VAT | {bill.vat_rate:.0%} on professional fees only | VAT Act (not set by the Order) | {fmt(bill.vat_amount)} | Tax |")
+    lines.append(f"| **Total bill** | | | **{fmt(bill.total)}** | |")
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Self-test / usage example
 # ---------------------------------------------------------------------------
 
@@ -255,3 +475,15 @@ if __name__ == "__main__":
 
     print("\nSchedule 7 — Subordinate court instruction fee for Kshs 350,000, higher scale:")
     print(f"  Kshs {schedule7_instruction_fee(350_000, scale='higher'):,.2f}")
+
+    print("\nFull itemized bill — Kshs 26,000,000 defended High Court suit:")
+    bill = generate_high_court_bill(
+        26_000_000, defended=True,
+        letters_to_advocate=10, letters_to_client=5, mentions=2, hearings=3,
+        disbursements={
+            "Service of documents": 8_000,
+            "Court filing fees": 25_000,
+            "Photocopying/printing": 12_000,
+        },
+    )
+    print(format_bill_as_markdown(bill))

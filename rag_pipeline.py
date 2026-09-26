@@ -270,8 +270,38 @@ class RagPipeline:
          raise RuntimeError(
                 f"Groq rate/token limit after retries. Try again in a minute. Last error: {last_error}"
             )
+    def retrieve_bill_sources(self, advocate_client: bool = False) -> list[dict]:
+        """Retrieve the Order chunks that a Schedule 6 bill's rates come from.
+        Uses a fixed query naming the bill's items rather than the user's own
+        wording, since a bill request ("my case had 10 letters...") rarely
+        shares vocabulary with the Schedule text itself."""
+        query = (
+            "Schedule 6 costs of proceedings in the High Court party and party costs "
+            "instruction fees getting up or preparing for trial drawing folios "
+            "perusals correspondence letters attendances service"
+        )
+        if advocate_client:
+            query += " advocate and client costs fees prescribed in A increased by 50%"
+        return self.retrieve(query)
+
     def answer(self, query: str, top_k: int = TOP_K) -> dict:
         route_result = fee_router.route(query)
+
+        # A full itemized bill is already complete and verified — return it
+        # directly. Sending a large table through the LLM risks mangled figures
+        # and wastes gpt-oss reasoning tokens (the cause of empty answers).
+        # Retrieval still runs (it's local and cheap) so the answer shows the
+        # Order chunks the bill's rates come from, like every other answer.
+        if route_result is not None and route_result.scenario == "schedule6_full_bill":
+            return {
+                "query": query,
+                "answer": route_result.explanation,
+                "retrieved_chunks": self.retrieve_bill_sources(
+                    advocate_client="Part B" in route_result.explanation
+                ),
+                "calculator_result": route_result,
+            }
+
         retrieved_chunks = self.retrieve(query, top_k=top_k)
 
         if route_result is not None:
