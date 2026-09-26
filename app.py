@@ -19,9 +19,12 @@ import pandas as pd
 import streamlit as st
 
 import fee_calculator as fc
+import feedback
 from rag_pipeline import RagPipeline
 
 st.set_page_config(page_title="Advocate Remuneration Assistant", layout="wide")
+
+MAX_SUGGESTIONS_PER_SESSION = 3  # basic spam limit for the public suggestions box
 
 
 @st.cache_resource
@@ -64,20 +67,26 @@ with tab_chat:
     )
 
     if query:
-        pipeline = load_pipeline()
-        try:
-            with st.spinner("Retrieving and generating..."):
-                result = pipeline.answer(query)
-        except RuntimeError as e:
-            err = str(e).lower()
-            if "rate" in err or "limit" in err or "429" in err:
-                st.warning(
-                    "Rate/token limit on the free LLM tier. "
-                    "Please wait about 30 seconds and try again."
-                )
-            else:
-                st.error(str(e))
-            st.stop()
+        # Any widget interaction (e.g. submitting the suggestion form below)
+        # reruns this whole script. Cache the answer so a rerun for the same
+        # question doesn't call Groq again and burn the free-tier rate limit.
+        if st.session_state.get("last_query") != query:
+            pipeline = load_pipeline()
+            try:
+                with st.spinner("Retrieving and generating..."):
+                    st.session_state["last_result"] = pipeline.answer(query)
+                    st.session_state["last_query"] = query
+            except RuntimeError as e:
+                err = str(e).lower()
+                if "rate" in err or "limit" in err or "429" in err:
+                    st.warning(
+                        "Rate/token limit on the free LLM tier. "
+                        "Please wait about 30 seconds and try again."
+                    )
+                else:
+                    st.error(str(e))
+                st.stop()
+        result = st.session_state["last_result"]
 
         if result.get("calculator_result") is not None:
             st.success(
@@ -94,6 +103,40 @@ with tab_chat:
                 "The model returned an empty answer. "
                 "Wait a few seconds and try the same question again."
             )
+
+        if "not covered in the provided documents" in answer.lower() and feedback.is_configured():
+            submitted_for = st.session_state.setdefault("suggested_queries", [])
+            if query in submitted_for:
+                st.info("Thanks — your suggestion for this question has been recorded.")
+            elif len(submitted_for) >= MAX_SUGGESTIONS_PER_SESSION:
+                st.info("You've reached the suggestion limit for this session. Thank you for the help!")
+            else:
+                with st.form("doc_request_form", clear_on_submit=True):
+                    st.markdown("#### Help improve the assistant")
+                    st.caption(
+                        "This question isn't covered yet. If you know a ruling, statute or other "
+                        "public document that answers it, suggest it and it may be added. "
+                        "Suggestions are posted publicly as GitHub issues, so please don't include "
+                        "personal or confidential information."
+                    )
+                    suggestion = st.text_area(
+                        "Which document or ruling should be added?", max_chars=1000,
+                        placeholder="e.g. Kenya Law ruling on taxation of costs in probate matters",
+                    )
+                    link = st.text_input("Link (optional)", max_chars=300,
+                                         placeholder="https://new.kenyalaw.org/...")
+                    send = st.form_submit_button("Submit suggestion")
+
+                if send:
+                    if not suggestion.strip():
+                        st.error("Please describe the document before submitting.")
+                    else:
+                        try:
+                            feedback.submit_document_request(query, suggestion.strip(), link.strip())
+                            submitted_for.append(query)
+                            st.success("Thanks — your suggestion has been recorded.")
+                        except RuntimeError as e:
+                            st.error(f"Sorry, the suggestion couldn't be saved: {e}")
 
         render_sources(result["retrieved_chunks"])
 
