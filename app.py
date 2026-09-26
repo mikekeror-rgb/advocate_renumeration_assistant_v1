@@ -45,36 +45,15 @@ with tab_chat:
 
     if query:
         pipeline = load_pipeline()
-        try:
-            with st.spinner("Retrieving and generating..."):
-                result = pipeline.answer(query)
-        except RuntimeError as e:
-            err = str(e).lower()
-            if "rate" in err or "limit" in err or "429" in err:
-                st.warning(
-                    "Rate/token limit on the free LLM tier. "
-                    "Please wait about 30 seconds and try again."
-                )
-            else:
-                st.error(str(e))
-            st.stop()
+        with st.spinner("Retrieving and generating..."):
+            result = pipeline.answer(query)
 
-        # Calculator badge first (optional — move below answer if you prefer)
-        if result.get("calculator_result") is not None:
-            st.success(
-                f"✅ Calculated exactly via fee_router — "
-                f"{result['calculator_result'].schedule_citation}"
-            )
-
-        # Answer — always render something visible
         st.markdown("### Answer")
-        answer = (result.get("answer") or "").strip()
-        if answer:
-            st.markdown(answer)   # markdown handles bold/lists better than st.write
-        else:
-            st.warning(
-                "The model returned an empty answer (often a rate limit). "
-                "Wait a few seconds and try the same question again."
+        st.write(result["answer"])
+
+        if result["calculator_result"] is not None:
+            st.success(
+                f"✅ Calculated exactly via fee_router — {result['calculator_result'].schedule_citation}"
             )
 
         retrieved = result["retrieved_chunks"]

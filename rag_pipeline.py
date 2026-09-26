@@ -16,7 +16,6 @@ import chromadb
 from groq import Groq, APIError, RateLimitError, AuthenticationError, APIStatusError
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
-
 import fee_router
 
 CHROMA_DIR =  str(Path(__file__).resolve().parent / "chroma_db")
@@ -76,7 +75,7 @@ class RagPipeline:
         self.groq_client = Groq(api_key=api_key)
 
         client = chromadb.PersistentClient(path=chroma_dir)
-        
+
         existing = [c.name for c in client.list_collections()]
         if collection_name not in existing:
             raise RuntimeError(
@@ -217,9 +216,30 @@ class RagPipeline:
                             {"role": "user", "content": user_message},
                         ],
                         temperature=0.1,
-                        max_tokens=1024,
+                        max_completion_tokens=4096,  # gpt-oss-20b is a REASONING model — its hidden
+                        # chain-of-thought tokens draw from this SAME budget before any visible
+                        # answer text is emitted. At max_tokens=1024, harder questions could spend
+                        # the entire budget reasoning and return content="" with finish_reason=
+                        # "length" — no exception, just silent empty output. This was the actual
+                        # root cause of "long/complex questions return nothing" reported in testing.
+                        reasoning_effort="low",  # supported only by gpt-oss-20b/120b on Groq;
+                        # reduces how many tokens go to invisible reasoning, leaving more of the
+                        # budget for the actual visible answer. Raise to "medium"/"high" only if
+                        # answer quality suffers — that trades reliability for occasional lost answers again.
                     )
-                    return response.choices[0].message.content
+                    choice = response.choices[0]
+                    content = choice.message.content or ""
+                    if not content.strip() and choice.finish_reason == "length":
+                        # Defensive: even with the settings above, don't silently return empty —
+                        # this is exactly the failure mode that was invisible before. Surface it
+                        # as a clear, catchable error instead of a blank string reaching the UI.
+                        raise RuntimeError(
+                            "Groq returned empty content because the reasoning-token budget "
+                            "was exhausted before any answer text was written (finish_reason="
+                            "'length' with empty content). Try again, or reduce retrieved "
+                            "context / raise max_completion_tokens further."
+                        )
+                    return content
 
                 except RateLimitError as e:
                     last_error = e
