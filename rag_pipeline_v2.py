@@ -18,6 +18,7 @@ from llm_client import get_client_and_model, completion_kwargs
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
 import fee_router
+import case_matcher
 
 CHROMA_DIR =  str(Path(__file__).resolve().parent / "chroma_db")
 COLLECTION_NAME = "policy_docs"
@@ -26,7 +27,7 @@ GENERATION_MODEL_NAME = "openai/gpt-oss-20b" # fast free-tier model; swap e.g. "
 TOP_K = 5
 # Groq models (Llama 3.1 8B / 3.3 70B) support large context natively (~131k).
 # We no longer pass num_ctx; instead we keep CONTEXT_SNIPPET_CHARS so the prompt stays reasonable.
-CONTEXT_SNIPPET_CHARS = 1000
+CONTEXT_SNIPPET_CHARS = 2000
 
 SYSTEM_PROMPT = """You are a legal research assistant specializing in advocate remuneration \
 under Kenya's Advocates Remuneration Order and related case law. Answer the user's question \
@@ -81,6 +82,10 @@ class RagPipeline:
         self.collection = client.get_collection(collection_name)
         self._build_bm25_index()
 
+        self._case_index = case_matcher.build_case_index(
+            m["doc_title"] for m in self._bm25_metadatas if m.get("doc_type") == "ruling"
+        )
+
     def _build_bm25_index(self) -> None:
         """Pull every chunk already in Chroma and build a BM25 keyword index over it."""
         all_data = self.collection.get(include=["documents", "metadatas"])
@@ -95,9 +100,20 @@ class RagPipeline:
     def _tokenize(text: str) -> list[str]:
         return re.findall(r"[a-z0-9]+", text.lower())
 
-    def _bm25_search(self, query: str, n_results: int) -> list[dict]:
+   # Paste these two methods into class RagPipeline in rag_pipeline_v2.py,
+# REPLACING the existing _bm25_search and retrieve methods.
+# (Keep the 4-space class indentation exactly as below.)
+
+    def _bm25_search(self, query: str, n_results: int, doc_titles: set[str] | None = None) -> list[dict]:
+        """Keyword search. If doc_titles is given, only chunks from those rulings
+        are considered (case-scoped search)."""
         scores = self._bm25.get_scores(self._tokenize(query))
-        top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:n_results]
+        candidate_indices = range(len(scores))
+        if doc_titles:
+            candidate_indices = [
+                i for i in candidate_indices if self._bm25_metadatas[i]["doc_title"] in doc_titles
+            ]
+        top_indices = sorted(candidate_indices, key=lambda i: scores[i], reverse=True)[:n_results]
         chunks = []
         for idx in top_indices:
             if scores[idx] <= 0:
@@ -117,6 +133,8 @@ class RagPipeline:
                 "bm25_score": scores[idx],
             })
         return chunks
+
+    
 
     def _query_collection(self, query_embedding, n_results: int, where: dict | None = None) -> list[dict]:
         kwargs = {"query_embeddings": query_embedding.tolist(), "n_results": n_results}
@@ -144,7 +162,9 @@ class RagPipeline:
             })
         return chunks
 
-    def retrieve(self, query: str, top_k: int = TOP_K, statute_boost: int = 2, bm25_k: int = 3) -> list[dict]:
+    
+
+    def retrieve(self, query: str, top_k: int = TOP_K, statute_boost: int = 2, bm25_k: int = 3, case_k: int = 4) -> list[dict]:
         query_with_instruction = f"Represent this sentence for searching relevant passages: {query}"
         query_embedding = self.embedding_model.encode([query_with_instruction], normalize_embeddings=True)
 
@@ -160,9 +180,35 @@ class RagPipeline:
                 cid = chunk["chunk_id"]
                 rrf_scores[cid] = rrf_scores.get(cid, 0.0) + 1.0 / (rrf_k + rank)
                 chunk_by_id.setdefault(cid, chunk)
+        merged = [chunk_by_id[cid] for cid in sorted(rrf_scores, key=lambda cid: rrf_scores[cid], reverse=True)]
+        limit = top_k + statute_boost
 
-        merged_ids = sorted(rrf_scores, key=lambda cid: rrf_scores[cid], reverse=True)
-        return [chunk_by_id[cid] for cid in merged_ids[: top_k + statute_boost]]
+        # Case-scoped retrieval: chunk text rarely contains the case name, so when the
+        # question names a ruling, search INSIDE that ruling and pin its best chunks
+        # first. Fixes evidence missing from even the top 32 results (ruling_02/05).
+        # The total number of chunks stays the same, so prompt size is unchanged.
+        matched_cases = case_matcher.match_cases(query, self._case_index)
+        if not matched_cases:
+            return merged[:limit]
+
+        where = (
+            {"doc_title": matched_cases[0]} if len(matched_cases) == 1
+            else {"doc_title": {"$in": matched_cases}}
+        )
+        case_semantic = self._query_collection(query_embedding, n_results=case_k, where=where)
+        case_keyword = self._bm25_search(query, n_results=case_k, doc_titles=set(matched_cases))
+
+        pinned: list[dict] = []
+        seen: set[str] = set()
+        for i in range(case_k):  # interleave semantic and keyword hits from the case
+            for source in (case_semantic, case_keyword):
+                if i < len(source) and source[i]["chunk_id"] not in seen and len(pinned) < case_k:
+                    pinned.append(source[i])
+                    seen.add(source[i]["chunk_id"])
+
+        rest = [c for c in merged if c["chunk_id"] not in seen]
+        return (pinned + rest)[:limit]
+
 
     def build_context_block(self, retrieved_chunks: list[dict]) -> str:
         parts = []
@@ -272,6 +318,16 @@ class RagPipeline:
 
     def answer(self, query: str, top_k: int = TOP_K) -> dict:
         route_result = fee_router.route(query)
+
+        if route_result is None:
+            guard_message = fee_router.calculation_guard(query)
+            if guard_message is not None:
+                return {
+                    "query": query,
+                    "answer": guard_message,
+                    "retrieved_chunks": self.retrieve(query, top_k=top_k),
+                    "calculator_result": None,
+                }
 
         # A full itemized bill is already complete and verified — return it
         # directly. Sending a large table through the LLM risks mangled figures
