@@ -37,10 +37,11 @@ def extract_amount(text: str) -> float | None:
         raw_number, suffix = match.groups()
         has_comma = "," in raw_number
         has_suffix = bool(suffix)
+        is_large_bare = len(raw_number.split(".")[0]) >= 5  # e.g. 26000000; years (2025) and "Schedule 6" stay excluded
         preceding = text[max(0, match.start() - 12):match.start()].lower()
         has_currency_word = any(w in preceding for w in ("kshs", "ksh", "shs", "shilling"))
 
-        if not (has_comma or has_suffix or has_currency_word):
+        if not (has_comma or has_suffix or has_currency_word or is_large_bare):
             continue
 
         value = float(raw_number.replace(",", ""))
@@ -154,6 +155,36 @@ def _extract_disbursement(text: str, label_pattern: str) -> float | None:
         text, re.IGNORECASE,
     )
     return float(match.group(1).replace(",", "")) if match else None
+
+_CALC_INTENT = re.compile(r"\b(?:calculat\w*|comput\w*|work\s+out|how\s+much)\b", re.IGNORECASE)
+
+_FEE_DOMAIN = re.compile(
+    r"\badvocate|\bfees?\b|\bcosts\b|\btaxation\b|\btaxing\b|\bremuneration\b",
+    re.IGNORECASE,
+)
+
+def calculation_guard(text: str) -> str | None:
+    """For questions that ask for a calculation route() couldn't handle.
+    Returns a message to show instead of letting the LLM compute: evals showed
+    every model (Qwen and gpt-oss-20b) copied figures from retrieved rulings."""
+    if not _CALC_INTENT.search(text):
+        return None
+    if classify_scenario(text) is None:
+        if not _FEE_DOMAIN.search(text):
+            return None  # not about advocates' fees: let retrieval answer, usually "Not covered"
+        return (
+            "I can compute exact fees for: High Court instruction fees and bills of costs "
+            "(Schedule 6), subordinate court instruction fees (Schedule 7), sale/purchase "
+            "instruction fees (Schedule 1, First Scale), and creating or discharging a "
+            "mortgage/charge (Schedule 1, Second Scale). This question doesn't match one of "
+            "those, so I won't calculate a figure. You can ask what the Order says about it instead."
+        )
+    if extract_amount(text) is None:
+        return (
+            "I can calculate this exactly, but I couldn't find the amount in your question. "
+            "Please include it, for example 'Kshs 26,000,000' or '26 million'."
+        )
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -316,12 +347,21 @@ if __name__ == "__main__":
         "Subordinate court fee for a 350,000 claim?",
         "What's the conveyancing fee on a Kshs 12,000,000 land sale?",
         "What is the capital of Kenya?",  # should return None
+        "Calculate instruction fee for a contentious matter in the High Court with defense where the subject matter is 26000000",
+        "A defended High Court suit filed in 2024 worth 26000000",
+        "Calculate the instruction fee for a defended High Court suit",
+        "Calculate the fee for drafting a will for a 5,000,000 estate",
+        "How much does it cost to register a company in Uganda?",
+        "How much is a single business permit in Mombasa?",
+
     ]
     for q in test_queries:
         result = route(q)
         print(f"\nQ: {q}")
-        if result is None:
-            print("  -> No route (falls back to normal RAG retrieval)")
-        else:
+        if result is not None:
             print(f"  -> {result.explanation}")
             print(f"     [{result.schedule_citation}]")
+        elif (guard := calculation_guard(q)) is not None:
+            print(f"  -> GUARD: {guard}")
+        else:
+            print("  -> No route (falls back to normal RAG retrieval)")
