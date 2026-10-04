@@ -1,0 +1,17 @@
+{
+  "policy": "advocate-ep1",
+  "judge": "gpt-5.4-mini",
+  "pairs": 81,
+  "checked": {
+    "grounded": 370,
+    "refusal": 52,
+    "offscope": 26
+  },
+  "failing": {
+    "grounded": 81
+  },
+  "reasons": {
+    "incorrect": 58,
+    "did not cite the source chunk": 32
+  }
+}
