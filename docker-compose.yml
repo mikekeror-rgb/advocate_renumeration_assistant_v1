@@ -1,0 +1,74 @@
+# Two ways to run (copy .env.example to .env first):
+#
+#   docker compose up --build
+#       The app on http://localhost:8501, answering with Groq. Works on any laptop.
+#
+#   docker compose --profile gpu up --build
+#       Also starts vLLM on an NVIDIA GPU host, serving Qwen2.5-7B-Instruct with the
+#       DPO adapter, plus a second app on http://localhost:8502 that uses it.
+#       Needs the NVIDIA Container Toolkit and ~24 GB of GPU memory.
+
+services:
+  app:
+    build: .
+    image: advocate-assistant:latest
+    ports:
+      - "8501:8501"
+    env_file: .env            # GROQ_API_KEY, plus any feedback-feature settings
+    restart: unless-stopped
+
+  vllm:
+    profiles: ["gpu"]
+    # Pinned to the vLLM version used for the project's benchmarks. Check the tag exists
+    # on Docker Hub (hub.docker.com/r/vllm/vllm-openai/tags) and pin the nearest release.
+    image: vllm/vllm-openai:v0.30.0
+    command:
+      - --model=Qwen/Qwen2.5-7B-Instruct
+      - --served-model-name=base
+      - --enable-lora
+      - --max-lora-rank=16
+      - --lora-modules
+      - advocate-dpo=/adapters/qwen7b-advocate-dpo
+      - --max-model-len=8192
+      - --gpu-memory-utilization=0.92
+      - --api-key=${VLLM_API_KEY:-change-me}
+    environment:
+      HF_TOKEN: ${HF_TOKEN:-}
+    volumes:
+      - ${ADAPTERS_DIR:-./adapters}:/adapters:ro    # unpack adapters.tgz here; never committed
+      - hf-cache:/root/.cache/huggingface           # model weights survive container restarts
+    ports:
+      - "8000:8000"
+    ipc: host                 # vLLM (PyTorch) needs the host's shared memory
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 600s      # first start downloads ~15 GB of weights
+      retries: 5
+
+  app-selfhosted:
+    profiles: ["gpu"]
+    build: .
+    image: advocate-assistant:latest
+    ports:
+      - "8502:8501"
+    env_file: .env
+    environment:
+      LLM_BASE_URL: http://vllm:8000/v1
+      LLM_API_KEY: ${VLLM_API_KEY:-change-me}
+      LLM_MODEL: advocate-dpo
+    depends_on:
+      vllm:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  hf-cache:

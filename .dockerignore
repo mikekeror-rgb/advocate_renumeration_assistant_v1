@@ -1,0 +1,16 @@
+# Keep the image small and free of secrets.
+.git
+.github
+.devcontainer
+venv/
+**/__pycache__/
+*.pyc
+.env
+.streamlit/secrets.toml
+*.tgz
+# Not needed at runtime: the app reads chroma_db/, not the raw PDFs or training data.
+data/raw/
+training/
+adapters/
+eval/*.txt
+eval/qa_pairs_v2_candidates.jsonl
