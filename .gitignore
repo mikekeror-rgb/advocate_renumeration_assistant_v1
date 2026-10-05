@@ -3,3 +3,10 @@ data/raw/*.pdf
 __pycache__/
 .venv/
 *.pyc
+.env
+venv/
+training_data.tgz
+training/teacher_cache.jsonl
+training/dpo_policy_cache.jsonl
+training/rejected_log.jsonl.streamlit/secrets.toml
+.streamlit/secrets.tomltraining/rejected_log.jsonl

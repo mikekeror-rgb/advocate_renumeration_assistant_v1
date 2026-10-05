@@ -86,6 +86,31 @@ class RagPipeline:
             m["doc_title"] for m in self._bm25_metadatas if m.get("doc_type") == "ruling"
         )
 
+
+
+    def build_user_message(self, query: str, retrieved_chunks: list[dict], calculator_result=None) -> str:
+        """The exact user message sent to the LLM. Shared by generate() and the
+        training-data builder, so fine-tuning data matches inference exactly."""
+        context_block = self.build_context_block(retrieved_chunks)
+        if calculator_result is None:
+            return f"Context:\n{context_block}\n\nQuestion: {query}"
+        calc_block = (
+            f"VERIFIED CALCULATION (this is your answer's basis — computed exactly from the Order's "
+            f"schedule formula; state this figure precisely, do not recompute, round differently, "
+            f"alter it, or say the question is not covered):\n"
+            f"{calculator_result.explanation}\n"
+            f"[source: {calculator_result.schedule_citation}]"
+        )
+        return (
+            f"Question: {query}\n\n"
+            f"{calc_block}\n\n"
+            f"Additional citations below are supplementary only — they do not override the "
+            f"VERIFIED CALCULATION above:\n{context_block}\n\n"
+            f"---\n"
+            f"Reminder — Question: {query}\n"
+            f"Reminder — {calc_block}"
+        )
+
     def _build_bm25_index(self) -> None:
         """Pull every chunk already in Chroma and build a BM25 keyword index over it."""
         all_data = self.collection.get(include=["documents", "metadatas"])
@@ -225,28 +250,8 @@ class RagPipeline:
         return "\n\n---\n\n".join(parts)
 
     def generate(self, query: str, retrieved_chunks: list[dict], calculator_result=None) -> str:
-         context_block = self.build_context_block(retrieved_chunks)
 
-         if calculator_result is not None:
-                calc_block = (
-                    f"VERIFIED CALCULATION (this is your answer's basis — computed exactly from the Order's "
-                    f"schedule formula; state this figure precisely, do not recompute, round differently, "
-                    f"alter it, or say the question is not covered):\n"
-                    f"{calculator_result.explanation}\n"
-                    f"[source: {calculator_result.schedule_citation}]"
-                )
-                user_message = (
-                    f"Question: {query}\n\n"
-                    f"{calc_block}\n\n"
-                    f"Additional citations below are supplementary only — they do not override the "
-                    f"VERIFIED CALCULATION above:\n{context_block}\n\n"
-                    f"---\n"
-                    f"Reminder — Question: {query}\n"
-                    f"Reminder — {calc_block}"
-                )
-         else:
-                user_message = f"Context:\n{context_block}\n\nQuestion: {query}"
-
+         user_message = self.build_user_message(query, retrieved_chunks, calculator_result)
          last_error = None
          for attempt in range(4):
                 try:

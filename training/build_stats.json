@@ -1,0 +1,23 @@
+{
+  "teacher": "openai/gpt-oss-20b",
+  "stopped_early": null,
+  "train": 507,
+  "val": 43,
+  "by_kind": {
+    "grounded/ruling": 300,
+    "grounded/statute": 100,
+    "refusal": 60,
+    "calc": 60,
+    "offscope": 30
+  },
+  "events": {
+    "gold retrieved by pipeline": 305,
+    "gold inserted (retrieval missed it)": 95,
+    "rejected: unparseable JSON": 57,
+    "rejected: question doesn't name the case": 5,
+    "salvaged: [CITE] appended": 49,
+    "rejected: missing question or answer": 1,
+    "rejected: no [CITE] marker": 1,
+    "rejected: answer length": 2
+  }
+}

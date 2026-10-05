@@ -10,7 +10,12 @@ Three tabs:
   Case-specific facts (letters, folios, hearings, actual disbursements) can't
   come from the corpus, so the user enters them; rates come from the Order via
   fee_calculator, and the supporting Order chunks are shown as sources.
-- "Eval results": reads eval/results.csv and charts the eval metrics.
+- "Eval results": any eval/results*.csv run, plus the self-hosted fine-tuning
+  comparison (base vs SFT vs SFT+DPO) when those runs are present.
+
+LLM backend (via llm_client.py, read from environment / Streamlit secrets):
+- default: Groq (GROQ_API_KEY)
+- self-hosted vLLM: set LLM_BASE_URL, LLM_API_KEY and LLM_MODEL (e.g. advocate-dpo)
 """
 
 from pathlib import Path
@@ -19,8 +24,9 @@ import pandas as pd
 import streamlit as st
 
 import fee_calculator as fc
+import fee_router
 import feedback
-from rag_pipeline import RagPipeline
+from rag_pipeline_v2 import RagPipeline
 
 st.set_page_config(page_title="Advocate Remuneration Assistant", layout="wide")
 
@@ -48,6 +54,21 @@ def render_sources(retrieved: list[dict]) -> None:
             st.divider()
 
 
+def answered_by_llm(query: str, result: dict) -> bool:
+    """False when the answer came from deterministic code, not the model."""
+    calc = result.get("calculator_result")
+    if calc is not None and calc.scenario == "schedule6_full_bill":
+        return False  # full bills are returned straight from the calculator
+    if calc is None and fee_router.calculation_guard(query) is not None:
+        return False  # the calculation guard answered
+    return True
+
+
+def bool_values(series: pd.Series) -> pd.Series:
+    """CSV booleans arrive as True/False, 'True'/'False' or blanks; normalise them."""
+    return series.dropna().map(lambda v: str(v).strip().lower() == "true")
+
+
 tab_chat, tab_bill, tab_eval = st.tabs(["Ask a question", "Bill of costs", "Eval results"])
 
 
@@ -69,7 +90,7 @@ with tab_chat:
     if query:
         # Any widget interaction (e.g. submitting the suggestion form below)
         # reruns this whole script. Cache the answer so a rerun for the same
-        # question doesn't call Groq again and burn the free-tier rate limit.
+        # question doesn't call the LLM again and burn the free-tier rate limit.
         if st.session_state.get("last_query") != query:
             pipeline = load_pipeline()
             try:
@@ -103,6 +124,10 @@ with tab_chat:
                 "The model returned an empty answer. "
                 "Wait a few seconds and try the same question again."
             )
+
+        if answered_by_llm(query, result):
+            pipeline = load_pipeline()
+            st.caption(f"Written by `{pipeline.generation_model_name}` ({pipeline.backend}).")
 
         if "not covered in the provided documents" in answer.lower() and feedback.is_configured():
             submitted_for = st.session_state.setdefault("suggested_queries", [])
@@ -284,33 +309,71 @@ with tab_bill:
 # ---------------------------------------------------------------------------
 with tab_eval:
     st.title("Evaluation Results")
+    eval_dir = Path("eval")
 
-    results_path = Path("eval/results.csv")
-    if not results_path.exists():
-        st.warning("No `eval/results.csv` found yet — run `python eval/eval.py` first, then refresh this page.")
+    # The self-hosted fine-tuning experiment: same 62 questions, same pipeline, only the model differs.
+    experiment = {
+        "Base Qwen2.5-7B-Instruct": eval_dir / "results_v3_base.csv",
+        "SFT (QLoRA)": eval_dir / "results_v3_advocate-ep1.csv",
+        "SFT + DPO": eval_dir / "results_v3_advocate-dpo.csv",
+    }
+    if all(path.exists() for path in experiment.values()):
+        st.markdown("#### Fine-tuning experiment (self-hosted, vLLM on one RTX 4090)")
+        summary = []
+        for name, path in experiment.items():
+            d = pd.read_csv(path)
+            correct = bool_values(d["answer_correct"]) if "answer_correct" in d else pd.Series(dtype=bool)
+            cites = bool_values(d["citation_verifiable"])
+            named = bool_values(d["cites_named_case"]) if "cites_named_case" in d else pd.Series(dtype=bool)
+            judged = d["faithfulness_score"][d["faithfulness_score"] > 0]
+            summary.append({
+                "Model": name,
+                "Correctness": f"{correct.mean():.1%}" if len(correct) else "—",
+                "Fabricated citations": int((~cites).sum()),
+                "Cites the case asked about": f"{named.mean():.1%}" if len(named) else "—",
+                "Avg faithfulness (1-5)": round(judged.mean(), 2) if len(judged) else None,
+            })
+        st.dataframe(pd.DataFrame(summary).set_index("Model"), use_container_width=True)
+        st.caption(
+            "62 questions, 33 of them from rulings the models never saw in training. Fine-tuning removed "
+            "fabricated citations; correctness differences of one or two questions are within run-to-run noise. "
+            "The live assistant uses Groq unless a self-hosted server is configured."
+        )
+
+    runs = sorted(eval_dir.glob("results*.csv"))
+    if not runs:
+        st.warning("No eval results found yet — run `python eval/eval.py` first, then refresh this page.")
     else:
-        df = pd.read_csv(results_path)
+        names = [p.name for p in runs]
+        default = names.index("results_v3_advocate-dpo.csv") if "results_v3_advocate-dpo.csv" in names else 0
+        chosen = st.selectbox("Eval run", runs, index=default, format_func=lambda p: p.name)
+        df = pd.read_csv(chosen)
         df["category"] = df["id"].str.extract(r"^([a-z]+)_")
 
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Retrieval hit rate", f"{df['retrieval_hit'].mean():.0%}")
+        cols = st.columns(5)
+        if "answer_correct" in df:
+            correct = bool_values(df["answer_correct"])
+            if len(correct):
+                cols[0].metric("Answer correctness", f"{correct.mean():.0%}")
+        cols[1].metric("Retrieval hit rate", f"{bool_values(df['retrieval_hit']).mean():.0%}")
 
         numeric_df = df[df["expected_type"] == "numeric"]
         if len(numeric_df):
-            col2.metric("Numeric accuracy", f"{numeric_df['numeric_exact_match'].mean():.0%}")
+            cols[2].metric("Numeric accuracy", f"{bool_values(numeric_df['numeric_exact_match']).mean():.0%}")
 
-        fabricated = 0
-        cited_df = df[df["citation_verifiable"].notna()]
-        if len(cited_df):
-            fabricated = (~cited_df["citation_verifiable"].astype(bool)).sum()
-            col3.metric(
+        cites = bool_values(df["citation_verifiable"])
+        fabricated = int((~cites).sum())
+        if len(cites):
+            cols[3].metric(
                 "Citation accuracy",
-                f"{cited_df['citation_verifiable'].astype(bool).mean():.0%}",
+                f"{cites.mean():.0%}",
                 delta=f"-{fabricated} fabricated" if fabricated else None,
                 delta_color="inverse",
             )
 
-        col4.metric("Avg faithfulness", f"{df['faithfulness_score'].mean():.2f} / 5")
+        judged = df[df["faithfulness_score"] > 0]
+        if len(judged):
+            cols[4].metric("Avg faithfulness", f"{judged['faithfulness_score'].mean():.2f} / 5")
 
         st.caption(
             "Faithfulness is LLM-judged and should be read as a rough secondary signal — "
@@ -321,17 +384,16 @@ with tab_eval:
         chart_col1, chart_col2 = st.columns(2)
         with chart_col1:
             st.markdown("#### Faithfulness score distribution")
-            st.bar_chart(df["faithfulness_score"].value_counts().sort_index())
+            st.bar_chart(judged["faithfulness_score"].value_counts().sort_index())
         with chart_col2:
             st.markdown("#### Retrieval hit rate by question category")
-            st.bar_chart(df.groupby("category")["retrieval_hit"].mean())
+            df["retrieval_hit_bool"] = df["retrieval_hit"].map(lambda v: str(v).strip().lower() == "true")
+            st.bar_chart(df.groupby("category")["retrieval_hit_bool"].mean())
 
-        if len(cited_df) and fabricated:
+        if fabricated:
             st.markdown("#### ⚠ Fabricated citations")
-            st.dataframe(
-                cited_df[~cited_df["citation_verifiable"].astype(bool)][["id", "answer"]],
-                use_container_width=True,
-            )
+            bad_ids = cites[~cites].index
+            st.dataframe(df.loc[bad_ids, ["id", "answer"]], use_container_width=True)
 
         st.markdown("#### Full results")
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df.drop(columns=["retrieval_hit_bool"]), use_container_width=True)

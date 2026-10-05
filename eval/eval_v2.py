@@ -33,17 +33,18 @@ Env:
   JUDGE_MODEL      qwen2.5:7b (default, local Ollama) | e.g. gpt-5.4-mini
   EVAL_TAG         label for the results file, e.g. groq_baseline, qwen_vllm, qwen_lora
   EVAL_ONLY        comma-separated ids for a quick subset run, e.g. ruling_02,ruling_05
+  QA_FILE          question file (default eval/qa_pairs.jsonl), e.g. eval/qa_pairs_v2.jsonl
 """
 
 import csv
 import importlib
+from dotenv import load_dotenv
 import json
 import os
 import re
 import sys
 from collections import defaultdict
 from pathlib import Path
-from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -58,7 +59,7 @@ RagPipeline = _pipeline_module.RagPipeline
 # answers as unsupported (ruling_03 and ruling_06 in the Groq baseline).
 GENERATOR_SNIPPET_CHARS = getattr(_pipeline_module, "CONTEXT_SNIPPET_CHARS", 1000)
 
-QA_PATH = Path(__file__).parent / "qa_pairs.jsonl"
+QA_PATH = Path(os.environ.get("QA_FILE", Path(__file__).parent / "qa_pairs.jsonl"))
 EVAL_TAG = os.environ.get("EVAL_TAG", "").strip()
 RESULTS_PATH = Path(__file__).parent / (f"results_{EVAL_TAG}.csv" if EVAL_TAG else "results.csv")
 EVAL_ONLY = {i.strip() for i in os.environ.get("EVAL_ONLY", "").split(",") if i.strip()}
@@ -147,6 +148,9 @@ def check_evidence_retrieved(qa: dict, retrieved_chunks: list[dict]) -> str | No
       'missing'   - no retrieved chunk contains it: a retrieval failure
       None        - no evidence_hint for this question
     """
+    evidence_chunk_id = qa.get("evidence_chunk_id")
+    if evidence_chunk_id:
+        return "visible" if any(c["chunk_id"] == evidence_chunk_id for c in retrieved_chunks) else "missing"
     hint = qa.get("evidence_hint")
     if not hint:
         return None
@@ -198,12 +202,13 @@ def check_guard(qa: dict, answer_text: str, calculator_result) -> bool | None:
         return None
     return calculator_result is None and qa["expected_value"].lower() in answer_text.lower()
 
+
 def check_cites_named_case(qa: dict, answer_text: str) -> bool | None:
     """For ruling questions: does the answer cite at least one chunk from the case
     the question asks about? Catches cross-case attribution (ruling_03 cited a
     Brookshill v County Government of Kwale chunk to describe the Kariithi court's reasoning)."""
     doc_hint = qa.get("doc_hint")
-    if qa["expected_source"] != "ruling" or not doc_hint:
+    if qa["expected_source"] != "ruling" or not doc_hint or qa["expected_type"] != "factual":
         return None
     citations = CITED_CHUNK_ID_PATTERN.findall(answer_text)
     if not citations:
@@ -212,7 +217,7 @@ def check_cites_named_case(qa: dict, answer_text: str) -> bool | None:
 
 
 def category_of(qa: dict) -> str:
-    """calc_01 -> calc, ruling_05 -> ruling, noanswer_02 -> noanswer, guard_01 -> guard."""
+    """calc_01 -> calc, ruling_05 -> ruling, hruling_07 -> hruling (held-out), guard_01 -> guard."""
     return qa["id"].split("_")[0]
 
 
@@ -368,7 +373,7 @@ def run_eval():
         citation_verifiable = check_citation_verifiable(answer_text, retrieved_chunks)
         guard_correct = check_guard(qa, answer_text, calculator_result)
 
-        expects_calculator = qa["id"].startswith("calc_")
+        expects_calculator = qa["expected_type"] == "numeric"
         calculator_fired = calculator_result is not None
         calculator_routing_correct = (calculator_fired == expects_calculator)
 
@@ -475,13 +480,13 @@ def print_summary(rows: list[dict]) -> None:
             print(f"  ⚠ UNVERIFIABLE CITATIONS ({len(fabricated)}):")
             for r in fabricated:
                 print(f"    - {r['id']}: cited a chunk_id not present in retrieval")
+
     named_rows = [r for r in rows if r["cites_named_case"] is not None]
     if named_rows:
         wrong_case = [r["id"] for r in named_rows if not r["cites_named_case"]]
         print(f"Cites the case asked about:      {(len(named_rows) - len(wrong_case)) / len(named_rows):.1%}  (n={len(named_rows)})")
         if wrong_case:
             print(f"  ⚠ Cited another case instead: {', '.join(wrong_case)}")
-
 
     judged_rows = [r for r in rows if r["faithfulness_score"] > 0]
     if judged_rows:
