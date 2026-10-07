@@ -44,7 +44,9 @@ def main() -> int:
 
         # Streamlit renders its app container once the app is running.
         try:
-            page.wait_for_selector("[data-testid='stApp']", timeout=60_000)
+            page.locator(
+                "iframe[title='streamlitApp'], [data-testid='stApp']"
+            ).first.wait_for(state="attached", timeout=60_000)
             print("App is up.")
             ok = True
         except PWTimeout:
