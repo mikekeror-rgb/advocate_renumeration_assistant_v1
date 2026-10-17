@@ -79,3 +79,9 @@ Publish results with the tag and hash so the order can be checked.
 `prereg-v3` (commit 3d53f78) froze the dataset; PREREG.md in that commit was empty because of a staging slip. The text was committed afterwards, before any model was run. `prereg-v3.1` marks the final text. The dataset file is identical at both tags.
 
 Corpus fingerprint (3414 chunks, sha256[:16] of chunk ids and text): <HASH>
+
+## 12. Disclosures
+
+- Section 11 refers to a tag `prereg-v3.1`. That tag was not created; `prereg-v3.2` is the final pre-registration.
+- Section 4 was amended before `prereg-v3.2` and before any system under test was run: ablations are on the base model (matching the earlier study), not "the best of the above".
+- On 2026-10-17 at about 15:18 (after `prereg-v3`, before `prereg-v3.2`) I ran a five-question harness check (one question per stratum) with gpt-oss-20b on Groq and the harness's default judge (qwen2.5:7b). It was only to confirm the harness reads the v3 file. The output was deleted and is not reported. The tag message on `prereg-v3.2` ("no model run before this tag") should be read as "no system under test".
