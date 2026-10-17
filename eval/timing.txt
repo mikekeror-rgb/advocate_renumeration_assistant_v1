@@ -1,0 +1,4 @@
+full: n=40 median=2.10s mean=2.39s p95=4.83s
+nocase: n=40 median=2.03s mean=2.04s p95=3.98s
+snip1000: n=40 median=1.83s mean=2.04s p95=4.54s
+nocalc: n=40 median=2.83s mean=3.29s p95=8.40s
