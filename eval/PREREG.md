@@ -39,7 +39,7 @@ All run through the same frozen pipeline and the same generation settings.
 Base: Qwen2.5-7B-Instruct
 SFT (epoch 1 and epoch 2 adapters; the epoch is chosen on the old validation set, not on v3)
 SFT + DPO
-Pipeline ablations on the best of the above: DISABLE_CALCULATOR, DISABLE_CASE_SCOPE, CONTEXT_SNIPPET_CHARS reduced, and all three combined.
+Pipeline ablations on the base model: DISABLE_CALCULATOR, DISABLE_CASE_SCOPE, CONTEXT_SNIPPET_CHARS reduced, and all three combined.
 5. Hypotheses and outcomes
 
 Primary metric: judged correctness per question (0/1), scored by the frozen judge.
