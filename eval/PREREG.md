@@ -74,3 +74,8 @@ None. All 40 hand-computed values matched the router’s output (tolerance 0.5 K
 Commit this file together with eval/qa_pairs_v3.jsonl. Tag the commit prereg-v3.
 Only then run any model on v3.
 Publish results with the tag and hash so the order can be checked.
+## 11. Tag history and corpus fingerprint
+
+`prereg-v3` (commit 3d53f78) froze the dataset; PREREG.md in that commit was empty because of a staging slip. The text was committed afterwards, before any model was run. `prereg-v3.1` marks the final text. The dataset file is identical at both tags.
+
+Corpus fingerprint (3414 chunks, sha256[:16] of chunk ids and text): <HASH>
