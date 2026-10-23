@@ -27,7 +27,8 @@ GENERATION_MODEL_NAME = "openai/gpt-oss-20b" # fast free-tier model; swap e.g. "
 TOP_K = 5
 # Groq models (Llama 3.1 8B / 3.3 70B) support large context natively (~131k).
 # We no longer pass num_ctx; instead we keep CONTEXT_SNIPPET_CHARS so the prompt stays reasonable.
-CONTEXT_SNIPPET_CHARS = 2000
+CONTEXT_SNIPPET_CHARS = int(os.environ.get("CONTEXT_SNIPPET_CHARS", "2000"))  #CONTEXT_SNIPPET_CHARS = 2000
+DISABLE_CALCULATOR = os.environ.get("DISABLE_CALCULATOR") == "1"
 
 SYSTEM_PROMPT = """You are a legal research assistant specializing in advocate remuneration \
 under Kenya's Advocates Remuneration Order and related case law. Answer the user's question \
@@ -212,7 +213,7 @@ class RagPipeline:
         # question names a ruling, search INSIDE that ruling and pin its best chunks
         # first. Fixes evidence missing from even the top 32 results (ruling_02/05).
         # The total number of chunks stays the same, so prompt size is unchanged.
-        matched_cases = case_matcher.match_cases(query, self._case_index)
+        matched_cases = [] if os.environ.get("DISABLE_CASE_SCOPE") == "1" else case_matcher.match_cases(query, self._case_index)#matched_cases = case_matcher.match_cases(query, self._case_index)
         if not matched_cases:
             return merged[:limit]
 
@@ -322,17 +323,7 @@ class RagPipeline:
         return self.retrieve(query)
 
     def answer(self, query: str, top_k: int = TOP_K) -> dict:
-        route_result = fee_router.route(query)
-
-        if route_result is None:
-            guard_message = fee_router.calculation_guard(query)
-            if guard_message is not None:
-                return {
-                    "query": query,
-                    "answer": guard_message,
-                    "retrieved_chunks": self.retrieve(query, top_k=top_k),
-                    "calculator_result": None,
-                }
+        route_result = None if DISABLE_CALCULATOR else fee_router.route(query)#route_result = fee_router.route(query)
 
         # A full itemized bill is already complete and verified — return it
         # directly. Sending a large table through the LLM risks mangled figures
@@ -347,12 +338,34 @@ class RagPipeline:
                     advocate_client="Part B" in route_result.explanation
                 ),
                 "calculator_result": route_result,
+                "llm_unavailable": False,
             }
 
+        # The user asked for a calculation the router can't compute (no amount, or an
+        # unsupported fee type). Answer with the deterministic guard message instead of
+        # letting the LLM do arithmetic: evals showed every model copying figures from rulings.
+        if route_result is None:
+            guard_message = None if DISABLE_CALCULATOR else fee_router.calculation_guard(query)#guard_message = fee_router.calculation_guard(query)
+            if guard_message is not None:
+                return {
+                    "query": query,
+                    "answer": guard_message,
+                    "retrieved_chunks": self.retrieve(query, top_k=top_k),
+                    "calculator_result": None,
+                    "llm_unavailable": False,
+                }
+
         retrieved_chunks = self.retrieve(query, top_k=top_k)
+        llm_unavailable = False
 
         if route_result is not None:
-            answer_text = self.generate(query, retrieved_chunks, calculator_result=route_result)
+            try:
+                answer_text = self.generate(query, retrieved_chunks, calculator_result=route_result)
+            except RuntimeError:
+                # The LLM is unavailable (rate limit, blocked IP, outage), but the figure is
+                # deterministic, so answer with it directly rather than failing.
+                answer_text = f"{route_result.explanation} [source: {route_result.schedule_citation}]"
+                llm_unavailable = True
         else:
             answer_text = self.generate(query, retrieved_chunks)
 
@@ -361,8 +374,8 @@ class RagPipeline:
             "answer": answer_text,
             "retrieved_chunks": retrieved_chunks,
             "calculator_result": route_result,
+            "llm_unavailable": llm_unavailable,
         }
-
 
 if __name__ == "__main__":
     pipeline = RagPipeline()
