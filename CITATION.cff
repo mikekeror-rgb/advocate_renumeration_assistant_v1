@@ -1,0 +1,9 @@
+   cff-version: 1.2.0
+   message: "If you use this work, please cite it as below."
+   title: "Pipeline Engineering vs Fine-Tuning: A Pre-Registered Evaluation of a Kenyan Legal RAG Assistant"
+   authors:
+     - family-names: "Keror"
+       given-names: "Mike"
+   date-released: "2026-10-23"
+   repository-code: "https://github.com/mikekeror-rgb/advocate_renumeration_assistant_v1"
+   license: "MIT"
