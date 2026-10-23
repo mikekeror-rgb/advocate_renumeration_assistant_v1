@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Advocate Remuneration Assistant</title>
+<meta name="description" content="A Kenyan legal RAG assistant and a pre-registered test of pipeline engineering versus fine-tuning.">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Schibsted+Grotesk:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+/* Layout: one reading column, a results strip first, evidence after; the forest plot is the single exhibit. */
+:root {
+  --bg: #f3f5f6;
+  --surface: #ffffff;
+  --ink: #141c24;
+  --muted: #55616d;
+  --line: #d8dde2;
+  --accent: #0a6b58;
+  --accent-soft: #e2f0ec;
+  --data-grey: #8d97a1;
+  --font-display: "Schibsted Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1418; --surface: #141c22; --ink: #e8ecef; --muted: #9ba6b0;
+    --line: #26323b; --accent: #43c2a2; --accent-soft: #123029; --data-grey: #6f7b86;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1418; --surface: #141c22; --ink: #e8ecef; --muted: #9ba6b0;
+  --line: #26323b; --accent: #43c2a2; --accent-soft: #123029; --data-grey: #6f7b86;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 18px; line-height: 1.6;
+  padding-block: 56px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 880px; margin-inline: auto; display: flex; flex-direction: column; gap: 64px; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:focus-visible, .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.12; letter-spacing: -0.01em; }
+h1 { font-size: clamp(2.4rem, 7vw, 4rem); font-weight: 700; }
+h2 { font-size: clamp(1.5rem, 4vw, 1.9rem); font-weight: 600; margin-bottom: 18px; }
+h3 { font-size: 1.05rem; font-weight: 600; margin-bottom: 8px; }
+p { margin: 0 0 1em; max-width: 65ch; }
+.eyebrow { font-family: var(--font-mono); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 18px; }
+.lede { font-size: 1.28rem; line-height: 1.5; max-width: 40em; margin: 22px 0 28px; }
+.links { display: flex; flex-wrap: wrap; gap: 12px; }
+.btn { font-family: var(--font-display); font-weight: 600; font-size: 0.95rem; text-decoration: none; padding: 11px 18px; border-radius: 6px; border: 1px solid var(--line); color: var(--ink); background: var(--surface); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.btn:hover { border-color: var(--accent); }
+
+.strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 2px solid var(--ink); border-bottom: 1px solid var(--line); }
+.strip > div { padding: 22px 22px 22px 0; }
+.strip > div + div { padding-left: 22px; border-left: 1px solid var(--line); }
+.strip .big { font-family: var(--font-display); font-size: clamp(2rem, 5vw, 2.8rem); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.strip .big.pos { color: var(--accent); }
+.strip p { font-size: 0.95rem; line-height: 1.45; color: var(--muted); margin: 10px 0 0; }
+.strip .mono { font-family: var(--font-mono); font-size: 0.82rem; color: var(--ink); }
+
+ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 20px 0 0; display: grid; gap: 12px; max-width: 65ch; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 2.2rem minmax(0, 1fr); gap: 4px; }
+ol.steps li::before { content: counter(s); font-family: var(--font-mono); color: var(--accent); font-weight: 500; }
+ol.steps b { font-family: var(--font-display); font-weight: 600; }
+
+ul.facts { padding: 0; margin: 0; list-style: none; display: grid; gap: 14px; max-width: 65ch; }
+ul.facts li { padding-left: 20px; position: relative; }
+ul.facts li::before { content: ""; position: absolute; left: 0; top: 0.72em; width: 8px; height: 2px; background: var(--accent); }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+code { background: var(--accent-soft); padding: 1px 6px; border-radius: 4px; word-break: break-word; }
+
+/* forest plot */
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 22px 22px 18px; }
+.chart h3 { font-size: 1.15rem; margin-bottom: 4px; }
+.chart .sub { font-size: 0.9rem; color: var(--muted); margin: 0 0 18px; }
+.f-row { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(0, 1.5fr) minmax(0, 11.5em); align-items: center; gap: 0 14px; min-height: 36px; font-size: 0.92rem; }
+.f-head { font-family: var(--font-display); font-weight: 600; margin-top: 12px; padding-bottom: 2px; font-size: 0.92rem; }
+.f-label { padding-left: 14px; }
+.f-val { font-family: var(--font-mono); font-size: 0.8rem; text-align: right; font-variant-numeric: tabular-nums; }
+.f-track { position: relative; height: 36px; }
+.f-grid { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line); }
+.f-grid.zero { background: var(--muted); }
+.f-whisk { position: absolute; top: 50%; height: 3px; margin-top: -1.5px; background: var(--data-grey); border-radius: 2px; }
+.f-dot { position: absolute; top: 50%; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; background: var(--data-grey); }
+.f-row.pipe .f-whisk, .f-row.pipe .f-dot { background: var(--accent); }
+.f-axis .f-tick { position: absolute; top: 4px; font-family: var(--font-mono); font-size: 0.74rem; color: var(--muted); transform: translateX(-50%); }
+.f-axis .f-track { height: 26px; }
+.f-dir { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+.src { font-size: 0.82rem; color: var(--muted); margin: 14px 0 0; max-width: none; }
+@media (max-width: 600px) {
+  .f-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "l v" "t t"; min-height: 0; padding-top: 6px; }
+  .f-row .f-label { grid-area: l; padding-left: 0; }
+  .f-row .f-val { grid-area: v; }
+  .f-row .f-track { grid-area: t; height: 24px; }
+  .f-axis { grid-template-columns: minmax(0, 1fr); }
+  .f-axis > :first-child, .f-axis > :last-child { display: none; }
+}
+
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 0.9rem; }
+th, td { padding: 9px 12px; text-align: right; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; font-family: var(--font-mono); font-size: 0.82rem; }
+thead th { font-family: var(--font-display); font-weight: 600; font-size: 0.82rem; color: var(--muted); }
+tbody tr:last-child td { border-bottom: 0; }
+td.low { color: var(--ink); font-weight: 600; }
+caption { caption-side: bottom; text-align: left; padding: 10px 12px; font-size: 0.82rem; color: var(--muted); }
+
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; }
+.two > div { min-width: 0; }
+pre { margin: 0; padding: 16px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.84rem; line-height: 1.55; }
+footer { border-top: 1px solid var(--line); padding-top: 22px; font-size: 0.95rem; color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; }
+@media (max-width: 720px) {
+  body { font-size: 17px; padding-block: 36px 56px; }
+  .wrap { gap: 48px; }
+  .strip { grid-template-columns: minmax(0, 1fr); }
+  .strip > div, .strip > div + div { padding: 18px 0; border-left: 0; }
+  .strip > div + div { border-top: 1px solid var(--line); }
+  .two { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  .chart { padding: 16px 14px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <div class="eyebrow">Portfolio project · Mike Keror · October 2026</div>
+    <h1>Advocate Remuneration Assistant</h1>
+    <p class="lede">A question-answering system for Kenya's Advocates Remuneration Order and the court rulings that apply it, and a pre-registered test of what makes it accurate: the engineering around the model, or fine-tuning the model itself.</p>
+    <div class="links">
+      <a class="btn primary" href="report.pdf">Read the research report</a>
+      <a class="btn" href="https://advocate-renumeration-assistant.streamlit.app/">Live demo</a>
+      <a class="btn" href="https://github.com/mikekeror-rgb/advocate_renumeration_assistant_v1">Source code</a>
+      <a class="btn" href="https://huggingface.co/mikekeror/qwen2.5-7b-advocate-sft-lora-ep1">SFT adapter</a>
+      <a class="btn" href="https://huggingface.co/mikekeror/qwen2.5-7b-advocate-dpo-lora">DPO adapter</a>
+      <a class="btn" href="https://github.com/mikekeror-rgb/advocate_renumeration_assistant_v1/tree/prereg-v3.2">Pre-registration</a>
+    </div>
+    <p class="src" style="margin-top:16px">The live demo runs a hosted model (gpt-oss-20b on Groq), not the Qwen2.5-7B systems evaluated below. It is a prototype and not legal advice.</p>
+  </header>
+
+  <section class="strip" aria-label="Headline results">
+    <div>
+      <div class="big">87.7%</div>
+      <p>of 236 new test questions answered correctly by the full pipeline on Qwen2.5-7B-Instruct. Rulings from unseen cases score 78.3%.</p>
+    </div>
+    <div>
+      <div class="big pos">−28.0 pts</div>
+      <p>when case scoping, long context snippets and the fee calculator are all removed. <span class="mono">[−34.7, −21.2]</span></p>
+    </div>
+    <div>
+      <div class="big">No gain</div>
+      <p>from QLoRA fine-tuning or DPO. On unseen rulings: <span class="mono">−2.9 [−10.1, +4.9]</span> and <span class="mono">−2.9 [−12.5, +5.6]</span> points.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>What it does</h2>
+    <p>The corpus is the Advocates Remuneration Order and a set of court rulings, held as 3,414 chunks. A question passes through five steps, and the model never does arithmetic.</p>
+    <ol class="steps">
+      <li><span><b>Hybrid retrieval.</b> Dense vector search and BM25 keyword search, merged by reciprocal rank fusion.</span></li>
+      <li><span><b>Case scoping.</b> When a question names a case, retrieval is limited to that case.</span></li>
+      <li><span><b>Context building.</b> Retrieved chunks go to the model as long context snippets.</span></li>
+      <li><span><b>Fee calculator.</b> A router spots fee questions and computes the figure in code from the Order's schedule.</span></li>
+      <li><span><b>Generation.</b> The model answers and cites the chunks it used. The model backend is switched by environment variable.</span></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Why the test can be trusted</h2>
+    <p>An earlier 62-question study had been used while the pipeline was tuned, so it flattered the pipeline. The new test was built afterwards.</p>
+    <ul class="facts">
+      <li>The pipeline was frozen first (tag <code>pipeline-frozen-v1</code>), then 276 candidate questions were drafted and every one was reviewed by hand: 194 kept, 42 rewritten, 40 dropped.</li>
+      <li>14 rulings never used in training or earlier evaluation form an unseen stratum of 69 questions. The other strata are seen rulings (48), statute (23), no-answer (56) and fee calculation (40).</li>
+      <li>Gold answers for the 40 fee calculations were computed by hand and compared with the calculator afterwards. All 40 agreed.</li>
+      <li>Three different models played three roles: gpt-oss-20b wrote the training data, qwen/qwen3.8-27b wrote the questions and gpt-5.4-mini judges the answers.</li>
+      <li>The hypotheses, the analysis plan and the set's hash (<code>95ddd72d65bffeca</code>) were committed and tagged before any system under test was run.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Results</h2>
+    <div class="chart" role="figure" aria-labelledby="chart-title">
+      <h3 id="chart-title">Pipeline parts are worth 5 to 28 points; fine-tuning cannot be told from zero</h3>
+      <p class="sub">Change in overall accuracy against the system before the change, in percentage points, over 236 questions. Bars are 95% intervals.</p>
+      <div id="forest"></div>
+      <p class="src">Cluster bootstrap by case, 10,000 resamples. The identical rerun differed by 2 of 236 answers.</p>
+    </div>
+    <p style="margin-top:22px">The pre-registered fine-tuning tests use unseen rulings only, where SFT and DPO both score 2.9 points lower than the system before them, inside intervals about 15 to 18 points wide.</p>
+    <div class="tablewrap">
+      <table>
+        <caption>Accuracy, % of questions correct. The lowest score in each column is in bold.</caption>
+        <thead><tr><th>System</th><th>All</th><th>Unseen rulings</th><th>Seen rulings</th><th>Statute</th><th>No-answer</th><th>Calc</th></tr></thead>
+        <tbody id="acc"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Where the errors come from</h2>
+    <p>On the 117 ruling questions, the gold evidence was among the retrieved chunks 98.3% of the time for the base system (115 of 117). Retrieval is not the bottleneck. Cutting snippets to 1,000 characters left that figure unchanged at 98.3%, yet cost 26.1 points on unseen rulings. The evidence was retrieved but, as far as these data show, the shortened snippet no longer carried the answer.</p>
+    <div class="tablewrap">
+      <table>
+        <caption>Ruling questions only (n = 117). Retrieval hit: the harness's flag that the gold evidence was retrieved. Faithfulness: the judge's 1 to 5 score, mean. Descriptive only; no intervals computed.</caption>
+        <thead><tr><th>System</th><th>Retrieval hit, %</th><th>Faithfulness, mean</th></tr></thead>
+        <tbody>
+          <tr><td>base</td><td>98.3</td><td>4.59</td></tr>
+          <tr><td>ep1 (SFT)</td><td>98.3</td><td>4.59</td></tr>
+          <tr><td>dpo</td><td>98.3</td><td>4.47</td></tr>
+          <tr><td>nocase</td><td>94.9</td><td>4.47</td></tr>
+          <tr><td>snip1000</td><td>98.3</td><td>4.41</td></tr>
+          <tr><td>nocalc</td><td>99.1</td><td>4.74</td></tr>
+          <tr><td>stripped</td><td>95.7</td><td>4.28</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>What each component costs in latency</h2>
+    <p>The components that protect accuracy add almost no time. Switching the calculator off made answers slower, not faster, so the deterministic path is both more accurate and cheaper.</p>
+    <div class="tablewrap">
+      <table>
+        <caption>Seconds per answer for the pipeline call only, no judging. 40 questions (every sixth, all strata), base model on one vLLM server, single run after 3 untimed warm-up questions. No repeat run, so differences of a few tenths of a second may be noise.</caption>
+        <thead><tr><th>Setting</th><th>Median</th><th>Mean</th><th>P95</th></tr></thead>
+        <tbody>
+          <tr><td>full pipeline</td><td>2.10</td><td>2.39</td><td>4.83</td></tr>
+          <tr><td>case scoping off</td><td>2.03</td><td>2.04</td><td>3.98</td></tr>
+          <tr><td>snippets cut to 1,000 chars</td><td>1.83</td><td>2.04</td><td>4.54</td></tr>
+          <tr><td>calculator off</td><td>2.83</td><td>3.29</td><td>8.40</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:18px">Shorter snippets save about 0.3 seconds on the mean and cost 11.9 points of accuracy, so that trade is not worth making. The calculator switch also turns off the guard, whose fixed replies skip the model entirely. With both off, fee questions and those guard-answered questions all go to the model, which is the likely reason for the slower answers and the tail at 8.4 seconds, though I did not time that split. Only about seven of the 40 questions are fee calculations, so the P95 rests on very few answers.</p>
+  </section>
+
+  <section class="two">
+    <div>
+      <h2>What the results show</h2>
+      <p>Each pipeline component helps on a test it was not tuned on. Cutting snippets to 1,000 characters costs 26.1 points on unseen rulings. Turning the calculator off drops fee questions from 100% to 20%. Removing case scoping costs 4.7 points overall, the smallest effect.</p>
+      <p>Fine-tuning shows no detectable benefit at this sample size, and every interval includes zero.</p>
+    </div>
+    <div>
+      <h2>What they do not show</h2>
+      <p>That fine-tuning is useless. The unseen rulings come from only 14 cases, so a gain of a few points could hide in the intervals.</p>
+      <p>Statute questions cannot be truly unseen, and the judge is itself a model. I re-judged 30 randomly drawn answers by hand (seed 20261017) and agreed with the judge on all 30. Only 13 of those were scored by the model judge, the other 17 being deterministic checks on fee figures and refusals, so the real evidence is 13 for 13, which still allows a disagreement rate of about 20% or less at 95% confidence. One jurisdiction, one 7B model, one adapter of each kind.</p>
+      <p>The fee router and its guard also misfire: on 6 of the 236 questions (about 2.5%) they replied with a fixed fee message to a question that was not a fee calculation, so the full pipeline's accuracy is somewhat understated.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Reproduce it</h2>
+    <p>The frozen pipeline, the 236 questions, the raw results for all eight configurations and the analysis script are in the repository.</p>
+<pre>export LLM_BASE_URL=https://&lt;pod&gt;-8000.proxy.runpod.net/v1
+export LLM_API_KEY=&lt;key&gt;
+./run_v3_eval.sh                       # refuses to run if the set's hash differs
+python eval/analyze_v3.py --out eval/v3_results.md</pre>
+  </section>
+
+  <footer>
+    <span>Mike Keror · <a href="https://github.com/mikekeror-rgb">github.com/mikekeror-rgb</a></span>
+    <span>Pre-registration tags <code>prereg-v3</code> and <code>prereg-v3.2</code></span>
+  </footer>
+</main>
+
+<script>
+(function () {
+  var vmin = -38, vmax = 8;
+  var pos = function (v) { return ((v - vmin) / (vmax - vmin)) * 100; };
+  var fmt = function (v) { return (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(1); };
+  var rows = [
+    { g: "Pipeline component removed", k: "pipe", l: "Case scoping off", d: -4.7, lo: -8.8, hi: -0.8 },
+    { g: "Pipeline component removed", k: "pipe", l: "Snippets cut to 1,000 characters", d: -11.9, lo: -16.9, hi: -6.8 },
+    { g: "Pipeline component removed", k: "pipe", l: "Fee calculator off", d: -10.6, lo: -16.2, hi: -5.6 },
+    { g: "Pipeline component removed", k: "pipe", l: "All three removed", d: -28.0, lo: -34.7, hi: -21.2 },
+    { g: "Fine-tuning added", k: "ft", l: "SFT, against base", d: -2.5, lo: -5.9, hi: 0.9 },
+    { g: "Fine-tuning added", k: "ft", l: "DPO, against SFT", d: 0.8, lo: -2.6, hi: 4.4 },
+    { g: "Reference: nothing changed", k: "ft", l: "Identical rerun (noise)", d: 0.0, lo: -1.2, hi: 1.3 }
+  ];
+  var ticks = [-30, -20, -10, 0];
+  var el = document.getElementById("forest");
+  function grid(track) {
+    ticks.forEach(function (t) {
+      var s = document.createElement("span");
+      s.className = "f-grid" + (t === 0 ? " zero" : "");
+      s.style.left = pos(t) + "%";
+      track.appendChild(s);
+    });
+  }
+  var last = "";
+  rows.forEach(function (r) {
+    if (r.g !== last) {
+      var h = document.createElement("div");
+      h.className = "f-head"; h.textContent = r.g; el.appendChild(h); last = r.g;
+    }
+    var row = document.createElement("div");
+    row.className = "f-row " + r.k;
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-label", r.l + ": " + fmt(r.d) + " points, 95% interval " + fmt(r.lo) + " to " + fmt(r.hi));
+    var lab = document.createElement("div"); lab.className = "f-label"; lab.textContent = r.l;
+    var track = document.createElement("div"); track.className = "f-track"; grid(track);
+    var w = document.createElement("span"); w.className = "f-whisk";
+    w.style.left = pos(r.lo) + "%"; w.style.width = (pos(r.hi) - pos(r.lo)) + "%";
+    var dot = document.createElement("span"); dot.className = "f-dot"; dot.style.left = pos(r.d) + "%";
+    track.appendChild(w); track.appendChild(dot);
+    var val = document.createElement("div"); val.className = "f-val";
+    val.textContent = fmt(r.d) + " [" + fmt(r.lo) + ", " + fmt(r.hi) + "]";
+    row.appendChild(lab); row.appendChild(track); row.appendChild(val);
+    el.appendChild(row);
+  });
+  var ax = document.createElement("div"); ax.className = "f-row f-axis"; ax.setAttribute("aria-hidden", "true");
+  var e1 = document.createElement("div");
+  var tr = document.createElement("div"); tr.className = "f-track";
+  ticks.forEach(function (t) {
+    var s = document.createElement("span"); s.className = "f-tick"; s.style.left = pos(t) + "%"; s.textContent = t; tr.appendChild(s);
+  });
+  var e2 = document.createElement("div");
+  ax.appendChild(e1); ax.appendChild(tr); ax.appendChild(e2); el.appendChild(ax);
+  var dir = document.createElement("div"); dir.className = "f-dir"; dir.setAttribute("aria-hidden", "true");
+  dir.innerHTML = "<span>← less accurate</span><span>more accurate →</span>";
+  el.appendChild(dir);
+
+  var acc = [
+    ["base", 87.7, 78.3, 79.2, 91.3, 96.4, 100.0],
+    ["base_rerun", 87.7, 76.8, 81.2, 91.3, 96.4, 100.0],
+    ["ep1 (SFT)", 85.2, 75.4, 72.9, 87.0, 96.4, 100.0],
+    ["dpo", 86.0, 72.5, 81.2, 87.0, 96.4, 100.0],
+    ["nocase", 83.1, 68.1, 70.8, 91.3, 96.4, 100.0],
+    ["snip1000", 75.8, 52.2, 60.4, 87.0, 96.4, 100.0],
+    ["nocalc", 77.1, 79.7, 85.4, 95.7, 100.0, 20.0],
+    ["stripped", 59.7, 42.0, 54.2, 91.3, 100.0, 22.5]
+  ];
+  var body = document.getElementById("acc");
+  var mins = [];
+  for (var c = 1; c <= 6; c++) { mins[c] = Math.min.apply(null, acc.map(function (r) { return r[c]; })); }
+  acc.forEach(function (r) {
+    var tr2 = document.createElement("tr");
+    r.forEach(function (v, i) {
+      var td = document.createElement("td");
+      td.textContent = i === 0 ? v : v.toFixed(1);
+      if (i > 0 && v === mins[i] && mins[i] < 100) td.className = "low";
+      tr2.appendChild(td);
+    });
+    body.appendChild(tr2);
+  });
+})();
+</script>
+</body>
+</html>
