@@ -26,3 +26,11 @@ jobs:
         env:
           STREAMLIT_APP_URL: ${{ vars.STREAMLIT_APP_URL }}
         run: python scripts/wake_streamlit.py
+
+      - name: Upload screenshot if it failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wake-failure-screenshot
+          path: wake_failure.png
+          if-no-files-found: ignore
