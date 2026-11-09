@@ -231,15 +231,18 @@ moved to Groq so it could be deployed on Streamlit Community Cloud.
 | Case law | 6 | Finding the right ruling among many similar ones |
 | No answer | 3 | Refusing out-of-scope questions, including a near-miss (UK trade mark law vs Kenya's Schedule 4) |
 
-`eval/eval.py` scores each answer on:
+`eval/eval_v2.py` scores each answer on:
 
 | Metric | How it's measured | Deterministic? |
 |---|---|---|
 | Retrieval hit | A retrieved chunk contains the expected phrase (statutes) or comes from the expected case (rulings) | Yes |
+| Evidence retrieved | The answer-bearing passage was retrieved and falls inside the part of the chunk the generator sees | Yes |
 | Numeric exact match | The calculator produced the expected figure | Yes |
 | Answer states figure | The visible answer text contains the expected figure | Yes |
 | Calculator routing | The router fired exactly when it should | Yes |
 | Citation verifiable | Every cited chunk ID was actually retrieved for that question | Yes |
+| Guard correct | Guard questions got the deterministic guard message, not a model answer | Yes |
+| Answer correct | Matches the expected answer: checked in code for numeric, no-answer and guard questions, by an LLM judge against the reference for factual ones | Partly |
 | Faithfulness (1–5) | An LLM judge rates support by the retrieved context | No |
 
 Two design choices matter:

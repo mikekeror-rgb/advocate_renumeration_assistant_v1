@@ -18,8 +18,11 @@ import fee_calculator as fc
 # Amount extraction
 # ---------------------------------------------------------------------------
 
+# The lookbehind stops digits glued to letters from counting as amounts: a case
+# citation like "2026KEHC13078" was read as KSh 13,078 and sent a question about
+# a ruling to the bill-of-costs calculator.
 _AMOUNT_PATTERN = re.compile(
-    r"(?:kshs?\.?|ksh\.?|shs\.?|shillings?)?\s*"
+    r"(?<![A-Za-z\d])(?:kshs?\.?|ksh\.?|shs\.?|shillings?)?\s*"
     r"([\d]{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)"
     r"\s*(million|mn|m\b|thousand|k\b)?",
     re.IGNORECASE,
@@ -156,7 +159,14 @@ def _extract_disbursement(text: str, label_pattern: str) -> float | None:
     )
     return float(match.group(1).replace(",", "")) if match else None
 
-_CALC_INTENT = re.compile(r"\b(?:calculat\w*|comput\w*|work\s+out|how\s+much)\b", re.IGNORECASE)
+# A request to compute, not a mention of computing: "when calculating fees" or
+# "for the purpose of calculating" asks what the Order says, and "how much did
+# the court award" asks about a ruling. Both belong to retrieval, not the guard.
+_CALC_INTENT = re.compile(
+    r"\b(?:calculate|compute|work\s+out)\b"
+    r"|\bhow\s+much\s+(?:is|are|will|would|should|do|does|can|must|shall)\b",
+    re.IGNORECASE,
+)
 
 _FEE_DOMAIN = re.compile(
     r"\badvocate|\bfees?\b|\bcosts\b|\btaxation\b|\btaxing\b|\bremuneration\b",

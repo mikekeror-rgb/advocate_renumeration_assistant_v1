@@ -153,7 +153,7 @@ cp .env.example .env                 # add GROQ_API_KEY (free key at console.gro
 
 streamlit run app.py                 # the app
 python rag_pipeline_v2.py            # command-line Q&A
-python eval/eval.py                  # re-run the evaluation
+python eval/eval_v2.py               # re-run the evaluation
 ```
 
 To rebuild the index from new PDFs in `data/raw/`: `python chunk.py && python embed_index.py`.

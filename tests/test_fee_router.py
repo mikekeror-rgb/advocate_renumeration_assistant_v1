@@ -60,6 +60,43 @@ def test_guard_refuses_unsupported_fee_type():
     assert message is not None and "won't calculate" in message
 
 
+@pytest.mark.parametrize("text", [
+    # Regression (v3_seen_named_002): neutral citations were read as Kshs 13,078
+    "In Mwangi v Njenga 2026KEHC13078(KLR) (Ruling), what was the original bill of costs?",
+    "Mwendwa Mwinzi Associates Advocate v Mutie 2023KEELC16592(KLR)",
+])
+def test_case_citation_numbers_are_not_amounts(text):
+    assert fee_router.extract_amount(text) is None
+    assert fee_router.route(text) is None
+
+
+def test_currency_prefix_without_space_still_parses():
+    assert fee_router.extract_amount("a claim of Kshs26,000,000") == pytest.approx(26_000_000)
+
+
+@pytest.mark.parametrize("question", [
+    # Regressions from the v3 eval: questions about the rules, or about a ruling's
+    # outcome, that the guard answered with a canned calculator message
+    "Under the Advocates (Remuneration) Order, how is a fraction of KSh. 2,000 that is over "
+    "KSh. 1,000 treated when calculating fees under scales 1, 2 or 3?",
+    "When determining the value of the subject matter for the purpose of calculating legal fees, "
+    "what is the hierarchy of precedence if a matter has been concluded by way of a settlement?",
+    "In Cheruiyot v Ngeno 2026KEELC2320(KLR), how much did the court award in total instruction fees?",
+])
+def test_questions_about_calculation_rules_go_to_retrieval(question):
+    assert fee_router.route(question) is None
+    assert fee_router.calculation_guard(question) is None
+
+
+@pytest.mark.parametrize("question", [
+    "How much is the instruction fee for a defended High Court suit?",
+    "Can you work out the instruction fee for a defended High Court suit?",
+])
+def test_guard_still_catches_calculation_requests(question):
+    message = fee_router.calculation_guard(question)
+    assert message is not None and "couldn't find the amount" in message
+
+
 @pytest.mark.parametrize("question", [
     "How much does it cost to register a company in Uganda?",
     "How much is a single business permit in Mombasa?",
