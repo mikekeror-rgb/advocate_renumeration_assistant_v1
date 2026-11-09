@@ -16,6 +16,7 @@ import chromadb
 from openai import APIError, RateLimitError, AuthenticationError, APIStatusError
 from llm_client import get_client_and_model, completion_kwargs
 from rank_bm25 import BM25Okapi
+import torch
 from sentence_transformers import CrossEncoder, SentenceTransformer
 import fee_router
 import case_matcher
@@ -33,6 +34,9 @@ DISABLE_CALCULATOR = os.environ.get("DISABLE_CALCULATOR") == "1"
 # top_k / bm25_k, then let a cross-encoder pick which ones fill the same final slots.
 RERANK_POOL = int(os.environ.get("RERANK_POOL", "0"))
 RERANK_MODEL = os.environ.get("RERANK_MODEL", "BAAI/bge-reranker-base")
+# On a laptop CPU the default re-ranker takes ~14 s per question; on a GPU it's far
+# faster. Uses CUDA when present unless RERANK_DEVICE says otherwise (cpu, cuda, mps).
+RERANK_DEVICE = os.environ.get("RERANK_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
 
 SYSTEM_PROMPT = """You are a legal research assistant specializing in advocate remuneration \
 under Kenya's Advocates Remuneration Order and related case law. Answer the user's question \
@@ -71,7 +75,7 @@ class RagPipeline:
         generation_model_name: str = GENERATION_MODEL_NAME,
     ):
         self.embedding_model = SentenceTransformer(embedding_model_name, device="cpu")
-        self.reranker = CrossEncoder(RERANK_MODEL, device="cpu") if RERANK_POOL else None
+        self.reranker = CrossEncoder(RERANK_MODEL, device=RERANK_DEVICE) if RERANK_POOL else None
         self.generation_model_name = generation_model_name
 
         self.client, self.generation_model_name, self.backend = get_client_and_model(generation_model_name)
