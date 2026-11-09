@@ -120,3 +120,16 @@ retrieval_hit is not reported: passes by construction on 171/236 questions; repl
 | snip1000 | 79.3 [71.5, 86.9] (111/140) | 78.3 [65.4, 90.2] (54/69) | 79.2 [66.7, 89.6] (38/48) | 82.6 [65.2, 95.7] (19/23) |
 | nocalc | 80.0 [72.1, 87.6] (112/140) | 78.3 [65.3, 90.3] (54/69) | 81.2 [70.8, 91.7] (39/48) | 82.6 [65.2, 95.7] (19/23) |
 | stripped | 70.7 [63.2, 78.6] (99/140) | 65.2 [54.2, 76.8] (45/69) | 72.9 [60.4, 85.4] (35/48) | 82.6 [65.2, 95.7] (19/23) |
+
+## Exploratory: invented citations (not pre-registered)
+Answers citing a chunk ID that names a real document but a section it doesn't have (e.g. __s10__c1 for a ruling whose chunks end at s2). Counted from the answer text against data/chunks.jsonl, so it needs no retrieval log. Lower is better.
+| system | answers with an invented citation |
+|---|---|
+| base | 9 |
+| base_rerun | 9 |
+| ep1 | 0 |
+| dpo | 0 |
+| nocase | 8 |
+| snip1000 | 6 |
+| nocalc | 10 |
+| stripped | 5 |

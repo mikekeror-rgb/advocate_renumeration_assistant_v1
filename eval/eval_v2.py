@@ -15,7 +15,9 @@ Scores (per question):
                            retrieved, and inside the part of the chunk the generator sees?
   - numeric_exact_match  : calculator figure matches expected (router correctness)
   - answer_states_figure : the visible answer states the expected figure
-  - citation_verifiable  : EVERY cited chunk_id was actually retrieved
+  - citation_verifiable  : EVERY cited chunk_id names a retrieved chunk (formatting-tolerant)
+  - citation_invented    : a cited chunk_id names a real document but a section it doesn't have
+  - retrieved_chunk_ids  : logged so citation checks can be re-scored without re-running
   - calculator_routing_correct
   - guard_correct        : guard rows got the deterministic guard message, not an LLM answer
   - answer_correct       : does the answer match the expected answer? Deterministic for
@@ -54,6 +56,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # so the pipeli
 
 PIPELINE_MODULE = os.environ.get("PIPELINE_MODULE", "rag_pipeline_v2")
 _pipeline_module = importlib.import_module(PIPELINE_MODULE)
+
+import citations  # noqa: E402  (needs the sys.path entry above)
 RagPipeline = _pipeline_module.RagPipeline
 
 # The judge must see what the generator saw. The generator truncates every chunk to
@@ -74,7 +78,8 @@ EVAL_ONLY = {i.strip() for i in os.environ.get("EVAL_ONLY", "").split(",") if i.
 JUDGE_MODEL_NAME = os.environ.get("JUDGE_MODEL", "qwen2.5:7b")
 
 # Every 'chunk_id: X' citation, whether the model used [ ] or 【 】 brackets.
-CITED_CHUNK_ID_PATTERN = re.compile(r"chunk_id:\s*([^\]】]+)")
+CITED_CHUNK_ID_PATTERN = citations.CITED_CHUNK_ID_PATTERN
+CORPUS = citations.load_corpus()
 EXPECTED_REFUSAL = "not covered in the provided documents"
 
 
@@ -89,19 +94,14 @@ def check_citation_verifiable(answer_text: str, retrieved_chunks: list[dict]) ->
     '...__s5__c3', which doesn't exist in the corpus at all).
 
     Previously only the FIRST citation was checked, so a fabricated second citation
-    passed silently.
+    passed silently. IDs are compared ignoring case, spacing and punctuation (see
+    citations.py): an exact match rejected real retrieved chunks that the model wrote
+    as "Remuneration" instead of the corpus's "Renumeration".
 
     Returns None if the answer makes no chunk_id citation at all (e.g. a pure
     calculator answer citing only '[source: ...]', or a correct 'not covered').
     """
-    citations = CITED_CHUNK_ID_PATTERN.findall(answer_text)
-    if not citations:
-        return None
-    retrieved_ids = {c["chunk_id"] for c in retrieved_chunks}
-    # Verbatim substring check: a real citation contains an actually-retrieved
-    # chunk_id somewhere in the cited text (models sometimes append a case name
-    # after the real chunk_id inside the same brackets).
-    return all(any(cid in citation for cid in retrieved_ids) for citation in citations)
+    return citations.citations_verifiable(answer_text, [c["chunk_id"] for c in retrieved_chunks])
 
 
 def load_qa_pairs(path: Path) -> list[dict]:
@@ -373,6 +373,7 @@ def run_eval():
         numeric_match = check_numeric_exact_match(qa, answer_text, calculator_result)
         answer_states_figure = check_answer_states_figure(qa, answer_text)
         citation_verifiable = check_citation_verifiable(answer_text, retrieved_chunks)
+        citation_invented = citations.citations_invented(answer_text, CORPUS)
         guard_correct = check_guard(qa, answer_text, calculator_result)
 
         expects_calculator = qa["expected_type"] == "numeric"
@@ -407,12 +408,15 @@ def run_eval():
             "numeric_exact_match": numeric_match,
             "answer_states_figure": answer_states_figure,
             "citation_verifiable": citation_verifiable,
+            "citation_invented": citation_invented,
             "calculator_fired": calculator_fired,
             "calculator_routing_correct": calculator_routing_correct,
             "guard_correct": guard_correct,
             "cites_named_case": check_cites_named_case(qa, answer_text),
             "faithfulness_score": faithfulness_score,
             "faithfulness_reasoning": faithfulness_reasoning,
+            # Logged so citation checks can be re-scored later without re-running the model.
+            "retrieved_chunk_ids": json.dumps([c["chunk_id"] for c in retrieved_chunks]),
         })
 
     write_results(rows)
@@ -481,6 +485,10 @@ def print_summary(rows: list[dict]) -> None:
             print(f"  ⚠ UNVERIFIABLE CITATIONS ({len(fabricated)}):")
             for r in fabricated:
                 print(f"    - {r['id']}: cited a chunk_id not present in retrieval")
+        invented = [r["id"] for r in cited_rows if r["citation_invented"]]
+        print(f"Invented citations:              {len(invented)}  (cited chunk_id not in the corpus at all)")
+        if invented:
+            print(f"  ⚠ {', '.join(invented)}")
 
     named_rows = [r for r in rows if r["cites_named_case"] is not None]
     if named_rows:

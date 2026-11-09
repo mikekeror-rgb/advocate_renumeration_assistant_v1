@@ -16,7 +16,7 @@ The live demo runs a hosted model (gpt-oss-20b on Groq). The self-hosted Qwen2.5
 
 - **Pre-registered test (236 new questions, pipeline frozen and tagged before any run):** removing case-scoped retrieval, full-length context snippets and the fee calculator cost 28.0 points overall (87.7% to 59.7%), while QLoRA SFT and on-policy DPO showed no detectable gain on rulings from unseen cases (-2.9 [-10.1, +4.9] and -2.9 [-12.5, +5.6] points). See [the report](docs/report.pdf).
 - Pipeline engineering (retrieval fixes, a deterministic fee calculator, an input guard) drove most of the accuracy gains.
-- On the earlier 62-question set, QLoRA SFT eliminated fabricated citations (11 to 0) at parity or better on correctness.
+- On the earlier 62-question set, QLoRA SFT eliminated invented citations (chunk IDs naming a section that doesn't exist: 6 answers to 0) at parity or better on correctness. On the 236-question v3 set the pattern held: 9 answers for base, 0 for SFT and DPO (exploratory).
 - On-policy DPO (81 pairs mined from the SFT model's own mistakes) reached 92% preference accuracy on held-out pairs and gave the best case attribution, but no measurable correctness gain at n=62.
 - The remaining errors are dominated by retrieval misses shared by every model.
 - One RTX 4090 serves about 8 concurrent users on this workload, with 2-7% LoRA overhead.
@@ -88,11 +88,11 @@ Three question sets: 24 original questions; 62 questions including 33 held-out o
 | 62-question set | Base | SFT | SFT + DPO |
 |---|---|---|---|
 | Correctness | 85.5% | 87.1% | 87.1% |
-| Fabricated citations | 11 | 0 | 0 |
+| Invented citations | 6 | 0 | 0 |
 | Cites the case asked about | 87.2% | 89.7% | 92.3% |
 | Faithfulness (1-5) | 4.80 | 4.69 | 4.64 |
 
-On the original 24 questions, base and SFT both score 100% correct, but base fabricates 4 citations and SFT none. At n=62 the correctness differences are within noise; the fabricated-citation drop is the clear effect. Faithfulness dipped slightly for the adapters, which over-compress a few answers. Five questions fail for every model because retrieval never surfaces the right passage.
+On the original 24 questions, base and SFT both score 100% correct, but base invents 2 citations and SFT none. At n=62 the correctness differences are within noise; the drop in invented citations is the clear effect. (An earlier version of this table counted 11 "fabricated" citations. That exact-match check also rejected real chunks the model had written with different spelling or spacing, e.g. "Remuneration" for the corpus's misspelt "Renumeration"; 6 of the 11 were invented.) Faithfulness dipped slightly for the adapters, which over-compress a few answers. Five questions fail for every model because retrieval never surfaces the right passage.
 
 Evaluation runs surfaced a real bug each time, from silent context truncation (68% of chunks were cut at 1,000 characters) to fabricated citations and a contaminated training example; the [documentation](docs/DOCUMENTATION.md) lists them.
 
@@ -116,6 +116,7 @@ Effects with 95% intervals (cluster bootstrap by case, 10,000 resamples):
 - On unseen rulings, SFT against base is -2.9 [-10.1, +4.9] and DPO against SFT is -2.9 [-12.5, +5.6]. Neither interval excludes zero, so no benefit is detectable at this sample size. That is not evidence that fine-tuning is useless: the unseen rulings come from only 14 cases.
 - An identical rerun changed 2 of 236 answers (+0.0 [-1.2, +1.3]).
 - Retrieval found the gold evidence chunk for 78.6% of ruling questions (92 of 117), and it was missing for 14 of the 25 ruling questions the base model got wrong. Cutting snippets to 1,000 characters left that figure unchanged but cost 26.1 points on unseen rulings, so losses come both from retrieval misses and from context truncation after retrieval.
+- Exploratory, not pre-registered: base cited a chunk that doesn't exist (a real ruling, but a section number it doesn't have) in 9 of 236 answers, as did its identical rerun; SFT and DPO did so in none.
 - A hand re-judging of 30 random answers agreed with the judge on all 30 (13 of them model-judged; see [`eval/judge_handcheck.csv`](eval/judge_handcheck.csv)).
 - The fee router and guard misfired on 6 of 236 questions (about 2.5%) by returning a fixed fee message to a question that was not a fee calculation. Tightening their triggers is the clearest next improvement.
 - Answer latency per question (pipeline only, 40 mixed questions, one run): 2.10 s median with the full pipeline, 2.03 s without case scoping, 1.83 s with 1,000-character snippets, 2.83 s with the router and guard off.
