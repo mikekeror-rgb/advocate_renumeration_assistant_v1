@@ -27,7 +27,7 @@ faithful (score 5) but wrong. Only a reference-based check catches it.
 
 Writes: eval/results.csv, or eval/results_<EVAL_TAG>.csv, and prints a summary.
 
-Run from the project root: `python eval/eval.py`
+Run from the project root: `python eval/eval_v2.py`
 Env:
   PIPELINE_MODULE  rag_pipeline_v2 (default) | rag_pipeline
   JUDGE_MODEL      qwen2.5:7b (default, local Ollama) | e.g. gpt-5.4-mini
