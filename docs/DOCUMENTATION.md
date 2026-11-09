@@ -222,14 +222,15 @@ moved to Groq so it could be deployed on Streamlit Community Cloud.
 
 ## 7. Evaluation harness
 
-`eval/qa_pairs.jsonl` holds 22 questions in four categories:
+`eval/qa_pairs.jsonl` holds 24 questions in five categories:
 
 | Category | Count | Tests |
 |---|---|---|
-| Calculator | 7 | Routing and exact figures |
+| Calculator | 8 | Routing and exact figures |
 | Statute lookup | 6 | Retrieval and faithful quoting of the Order |
 | Case law | 6 | Finding the right ruling among many similar ones |
 | No answer | 3 | Refusing out-of-scope questions, including a near-miss (UK trade mark law vs Kenya's Schedule 4) |
+| Guard | 1 | A calculation request with no amount gets the deterministic guard message, not a model answer |
 
 `eval/eval_v2.py` scores each answer on:
 
@@ -255,15 +256,24 @@ Two design choices matter:
   (`gpt-5.4-mini`) can be selected with the `JUDGE_MODEL` environment variable.
   Faithfulness is reported as a secondary signal only.
 
-**Latest results** (from `eval/results.csv`, also shown in the app's Eval tab):
+**Latest results** on this set (from `eval/results.csv`: Groq `openai/gpt-oss-20b`,
+the live demo's model):
 
 | Metric | Result |
 |---|---|
-| Numeric accuracy | [FILL IN] |
-| Answer states figure | [FILL IN] |
-| Retrieval hit rate | [FILL IN] |
-| Citation accuracy | [FILL IN] |
-| Avg. faithfulness | [FILL IN] |
+| Answer correct | 24/24 |
+| Numeric accuracy | 8/8 |
+| Answer states figure | 8/8 |
+| Retrieval hit rate | 24/24 |
+| Citation accuracy | 16/18 answers that cite a chunk |
+| Avg. faithfulness | 5.00 (23 answers; the guard row is not judged) |
+
+This set is small and was used throughout development (section 8), so these
+scores are in-sample. Faithfulness for the three no-answer questions is set to 5 in code when
+the answer correctly refuses, not by the judge. The app's Eval tab shows the
+self-hosted fine-tuning comparison on the 62-question set (`results_v3_*.csv`), not
+this file. The main result is the pre-registered 236-question v3 set: 87.7% correct
+for the base model with the full pipeline; see `eval/v3_results.md`.
 
 ---
 
