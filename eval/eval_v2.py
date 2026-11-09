@@ -9,6 +9,8 @@ Runs:   RagPipeline (rag_pipeline_v2 by default; override with PIPELINE_MODULE) 
 
 Scores (per question):
   - retrieval_hit        : did retrieval surface the expected source (case-level for rulings)?
+                           Kept in the CSV for compatibility, left out of the summary: on v3 it
+                           passes by construction on 171/236 questions. Use evidence_retrieved.
   - evidence_retrieved   : optional (needs 'evidence_hint'): was the answer-bearing passage
                            retrieved, and inside the part of the chunk the generator sees?
   - numeric_exact_match  : calculator figure matches expected (router correctness)
@@ -449,7 +451,6 @@ def print_summary(rows: list[dict]) -> None:
     if ungraded:
         print(f"  ? Not graded (judge unparseable): {', '.join(ungraded)}")
 
-    print(f"Retrieval hit rate:              {sum(r['retrieval_hit'] for r in rows) / total:.1%}")
 
     evidence_rows = [r for r in rows if r["evidence_retrieved"] is not None]
     if evidence_rows:

@@ -93,3 +93,30 @@ Questions / clusters: ALL 236/181, ruling_unseen 69/14, ruling_seen 48/48, statu
 | calc | +0.0 | [+0.0, +0.0] | 0 / 0 |
 
 H2 and H3 are the confirmatory tests (unseen-ruling row). All other rows are exploratory.
+
+## Exploratory: false refusals (not pre-registered)
+Share of answerable questions (every stratum except noanswer) where the answer is the refusal "Not covered in the provided documents". Lower is better. Correctness scoring can't separate a refusal from a wrong answer; this can.
+| system | ALL | ruling_unseen | ruling_seen | statute | calc |
+|---|---|---|---|---|---|
+| base | 5.6 [2.4, 9.0] (10/180) | 8.7 [2.9, 15.5] (6/69) | 6.2 [0.0, 14.6] (3/48) | 4.3 [0.0, 13.0] (1/23) | 0.0 [0.0, 0.0] (0/40) |
+| base_rerun | 5.6 [2.5, 8.9] (10/180) | 8.7 [2.9, 15.4] (6/69) | 6.2 [0.0, 14.6] (3/48) | 4.3 [0.0, 13.0] (1/23) | 0.0 [0.0, 0.0] (0/40) |
+| ep1 | 3.9 [0.6, 8.1] (7/180) | 8.7 [0.0, 18.6] (6/69) | 2.1 [0.0, 6.2] (1/48) | 0.0 [0.0, 0.0] (0/23) | 0.0 [0.0, 0.0] (0/40) |
+| dpo | 2.8 [0.0, 6.6] (5/180) | 5.8 [0.0, 14.9] (4/69) | 2.1 [0.0, 6.2] (1/48) | 0.0 [0.0, 0.0] (0/23) | 0.0 [0.0, 0.0] (0/40) |
+| nocase | 11.7 [6.7, 17.0] (21/180) | 17.4 [7.7, 28.4] (12/69) | 16.7 [6.2, 27.1] (8/48) | 4.3 [0.0, 13.0] (1/23) | 0.0 [0.0, 0.0] (0/40) |
+| snip1000 | 13.9 [8.9, 18.8] (25/180) | 24.6 [16.4, 32.3] (17/69) | 14.6 [4.2, 25.0] (7/48) | 4.3 [0.0, 13.0] (1/23) | 0.0 [0.0, 0.0] (0/40) |
+| nocalc | 7.2 [3.7, 11.2] (13/180) | 8.7 [2.9, 15.4] (6/69) | 6.2 [0.0, 14.6] (3/48) | 4.3 [0.0, 13.0] (1/23) | 7.5 [0.0, 17.5] (3/40) |
+| stripped | 21.1 [15.6, 26.3] (38/180) | 31.9 [25.4, 38.2] (22/69) | 25.0 [12.5, 37.5] (12/48) | 4.3 [0.0, 13.0] (1/23) | 7.5 [0.0, 17.5] (3/40) |
+
+## Exploratory: evidence chunk recall (not pre-registered)
+Share of questions with a gold evidence chunk where that chunk was among the retrieved chunks. Higher is better. Measured on the chunk ID, so it does not see the context snippet cut-off: the snip1000 ablation keeps the same recall while losing accuracy.
+retrieval_hit is not reported: passes by construction on 171/236 questions; replaced by evidence recall.
+| system | ALL | ruling_unseen | ruling_seen | statute |
+|---|---|---|---|---|
+| base | 79.3 [71.5, 87.0] (111/140) | 78.3 [65.2, 90.2] (54/69) | 79.2 [66.7, 89.6] (38/48) | 82.6 [65.2, 95.7] (19/23) |
+| base_rerun | 79.3 [71.5, 86.8] (111/140) | 78.3 [65.3, 90.2] (54/69) | 79.2 [66.7, 89.6] (38/48) | 82.6 [65.2, 95.7] (19/23) |
+| ep1 | 79.3 [71.2, 86.7] (111/140) | 78.3 [65.4, 90.2] (54/69) | 79.2 [66.7, 89.6] (38/48) | 82.6 [65.2, 95.7] (19/23) |
+| dpo | 79.3 [71.3, 86.7] (111/140) | 78.3 [65.3, 90.3] (54/69) | 79.2 [66.7, 89.6] (38/48) | 82.6 [65.2, 95.7] (19/23) |
+| nocase | 70.0 [62.3, 78.1] (98/140) | 65.2 [54.3, 76.6] (45/69) | 70.8 [58.3, 83.3] (34/48) | 82.6 [65.2, 95.7] (19/23) |
+| snip1000 | 79.3 [71.5, 86.9] (111/140) | 78.3 [65.4, 90.2] (54/69) | 79.2 [66.7, 89.6] (38/48) | 82.6 [65.2, 95.7] (19/23) |
+| nocalc | 80.0 [72.1, 87.6] (112/140) | 78.3 [65.3, 90.3] (54/69) | 81.2 [70.8, 91.7] (39/48) | 82.6 [65.2, 95.7] (19/23) |
+| stripped | 70.7 [63.2, 78.6] (99/140) | 65.2 [54.2, 76.8] (45/69) | 72.9 [60.4, 85.4] (35/48) | 82.6 [65.2, 95.7] (19/23) |

@@ -69,6 +69,30 @@ def bool_values(series: pd.Series) -> pd.Series:
     return series.dropna().map(lambda v: str(v).strip().lower() == "true")
 
 
+# The pre-registered v3 runs (eval/PREREG.md): results file tag -> label.
+V3_SYSTEMS = {
+    "base": "Base Qwen2.5-7B (full pipeline)",
+    "ep1": "SFT (QLoRA)",
+    "dpo": "SFT + DPO",
+    "nocase": "Base, case scoping off",
+    "snip1000": "Base, snippets cut to 1,000 chars",
+    "nocalc": "Base, fee router and guard off",
+    "stripped": "Base, all three off",
+}
+REFUSAL = "not covered in the provided documents"
+EVIDENCE_FOUND = ["visible", "truncated"]
+# Older runs (results1-6.csv) predate these columns and can't be shown.
+REQUIRED_COLUMNS = {"id", "expected_type", "citation_verifiable", "faithfulness_score"}
+
+
+def question_category(qid: str) -> str:
+    """'calc_01' -> 'calc'; v3 ids like 'v3_unseen_named_004' -> their stratum."""
+    parts = qid.split("_")
+    if parts[0][:1] == "v" and parts[0][1:].isdigit():
+        parts = parts[1:]
+    return {"unseen": "ruling_unseen", "seen": "ruling_seen"}.get(parts[0], parts[0])
+
+
 tab_chat, tab_bill, tab_eval = st.tabs(["Ask a question", "Bill of costs", "Eval results"])
 
 
@@ -311,6 +335,31 @@ with tab_eval:
     st.title("Evaluation Results")
     eval_dir = Path("eval")
 
+    v3_runs = {label: eval_dir / f"results_ev3_{tag}.csv" for tag, label in V3_SYSTEMS.items()}
+    if all(path.exists() for path in v3_runs.values()):
+        st.markdown("#### Pre-registered evaluation (236 new questions, self-hosted on one RTX 4090)")
+        summary = []
+        for name, path in v3_runs.items():
+            d = pd.read_csv(path)
+            answerable = d["id"].map(question_category) != "noanswer"
+            refused = d["answer"].fillna("").str.lower().str.contains(REFUSAL, regex=False)
+            evidence = d["evidence_retrieved"].dropna()
+            summary.append({
+                "System": name,
+                "Correctness": f"{bool_values(d['answer_correct']).mean():.1%}",
+                "False refusals": f"{refused[answerable].mean():.1%}",
+                "Evidence recall": f"{evidence.isin(EVIDENCE_FOUND).mean():.1%}",
+                "Unverifiable citations": int((~bool_values(d["citation_verifiable"])).sum()),
+            })
+        st.dataframe(pd.DataFrame(summary).set_index("System"), use_container_width=True)
+        st.caption(
+            "Questions written after the pipeline was frozen and pre-registered before any run "
+            "(eval/PREREG.md). False refusals: answerable questions answered \"Not covered\". "
+            "Evidence recall: the chunk holding the answer was retrieved. SFT and DPO showed no "
+            "detectable gain over base; an identical rerun of base changed 2 of 236 answers. "
+            "95% intervals are in eval/v3_results.md."
+        )
+
     # The self-hosted fine-tuning experiment: same 62 questions, same pipeline, only the model differs.
     experiment = {
         "Base Qwen2.5-7B-Instruct": eval_dir / "results_v3_base.csv",
@@ -340,22 +389,25 @@ with tab_eval:
             "The live assistant uses Groq unless a self-hosted server is configured."
         )
 
-    runs = sorted(eval_dir.glob("results*.csv"))
+    runs = [p for p in sorted(eval_dir.glob("results*.csv"))
+            if REQUIRED_COLUMNS <= set(pd.read_csv(p, nrows=0).columns)]
     if not runs:
-        st.warning("No eval results found yet — run `python eval/eval.py` first, then refresh this page.")
+        st.warning("No eval results found yet — run `python eval/eval_v2.py` first, then refresh this page.")
     else:
         names = [p.name for p in runs]
         default = names.index("results_v3_advocate-dpo.csv") if "results_v3_advocate-dpo.csv" in names else 0
         chosen = st.selectbox("Eval run", runs, index=default, format_func=lambda p: p.name)
         df = pd.read_csv(chosen)
-        df["category"] = df["id"].str.extract(r"^([a-z]+)_")
+        df["category"] = df["id"].map(question_category)
 
         cols = st.columns(5)
         if "answer_correct" in df:
             correct = bool_values(df["answer_correct"])
             if len(correct):
                 cols[0].metric("Answer correctness", f"{correct.mean():.0%}")
-        cols[1].metric("Retrieval hit rate", f"{bool_values(df['retrieval_hit']).mean():.0%}")
+        evidence = df["evidence_retrieved"].dropna() if "evidence_retrieved" in df else pd.Series(dtype=object)
+        if len(evidence):
+            cols[1].metric("Evidence recall", f"{evidence.isin(EVIDENCE_FOUND).mean():.0%}")
 
         numeric_df = df[df["expected_type"] == "numeric"]
         if len(numeric_df):
@@ -377,7 +429,7 @@ with tab_eval:
 
         st.caption(
             "Faithfulness is LLM-judged and should be read as a rough secondary signal — "
-            "retrieval hit rate, numeric accuracy, and citation accuracy above are deterministic "
+            "evidence recall, numeric accuracy, and citation accuracy above are deterministic "
             "and more reliable on their own."
         )
 
@@ -386,9 +438,12 @@ with tab_eval:
             st.markdown("#### Faithfulness score distribution")
             st.bar_chart(judged["faithfulness_score"].value_counts().sort_index())
         with chart_col2:
-            st.markdown("#### Retrieval hit rate by question category")
-            df["retrieval_hit_bool"] = df["retrieval_hit"].map(lambda v: str(v).strip().lower() == "true")
-            st.bar_chart(df.groupby("category")["retrieval_hit_bool"].mean())
+            st.markdown("#### Evidence recall by question category")
+            if len(evidence):
+                found = evidence.isin(EVIDENCE_FOUND)
+                st.bar_chart(found.groupby(df.loc[evidence.index, "category"]).mean())
+            else:
+                st.caption("This run has no evidence labels.")
 
         if fabricated:
             st.markdown("#### ⚠ Fabricated citations")
@@ -396,4 +451,4 @@ with tab_eval:
             st.dataframe(df.loc[bad_ids, ["id", "answer"]], use_container_width=True)
 
         st.markdown("#### Full results")
-        st.dataframe(df.drop(columns=["retrieval_hit_bool"]), use_container_width=True)
+        st.dataframe(df, use_container_width=True)
