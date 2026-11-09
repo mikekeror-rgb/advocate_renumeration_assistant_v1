@@ -81,7 +81,7 @@ flowchart LR
 
 ## Evaluation
 
-The harness measures exact numeric correctness, retrieval hits, calculator routing, citation verifiability (does every cited chunk exist in what was retrieved?), whether the answer cites the case it was asked about, and LLM-judged faithfulness. Factual answers are judged against a reference answer.
+The harness measures exact numeric correctness, evidence recall (was the passage holding the answer retrieved?), calculator routing, citation verifiability (does every cited chunk exist in what was retrieved?), whether the answer cites the case it was asked about, and LLM-judged faithfulness. Factual answers are judged against a reference answer.
 
 Three question sets: 24 original questions; 62 questions including 33 held-out ones and three hand-written hard cases; and a 236-question pre-registered set (v3, described below).
 
@@ -115,7 +115,7 @@ Effects with 95% intervals (cluster bootstrap by case, 10,000 resamples):
 - Each pipeline component helps: snippets cut -11.9 [-16.9, -6.8] overall; fee router and guard off -10.6 [-16.2, -5.6]; case scoping off -4.7 [-8.8, -0.8]; all three off -28.0 [-34.7, -21.2].
 - On unseen rulings, SFT against base is -2.9 [-10.1, +4.9] and DPO against SFT is -2.9 [-12.5, +5.6]. Neither interval excludes zero, so no benefit is detectable at this sample size. That is not evidence that fine-tuning is useless: the unseen rulings come from only 14 cases.
 - An identical rerun changed 2 of 236 answers (+0.0 [-1.2, +1.3]).
-- Retrieval found the gold evidence for 98.3% of ruling questions, so the losses happen after retrieval.
+- Retrieval found the gold evidence chunk for 78.6% of ruling questions (92 of 117), and it was missing for 14 of the 25 ruling questions the base model got wrong. Cutting snippets to 1,000 characters left that figure unchanged but cost 26.1 points on unseen rulings, so losses come both from retrieval misses and from context truncation after retrieval.
 - A hand re-judging of 30 random answers agreed with the judge on all 30 (13 of them model-judged; see [`eval/judge_handcheck.csv`](eval/judge_handcheck.csv)).
 - The fee router and guard misfired on 6 of 236 questions (about 2.5%) by returning a fixed fee message to a question that was not a fee calculation. Tightening their triggers is the clearest next improvement.
 - Answer latency per question (pipeline only, 40 mixed questions, one run): 2.10 s median with the full pipeline, 2.03 s without case scoping, 1.83 s with 1,000-character snippets, 2.83 s with the router and guard off.

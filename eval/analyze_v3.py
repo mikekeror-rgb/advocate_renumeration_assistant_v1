@@ -5,6 +5,10 @@ Paired differences between systems, 95% percentile intervals from a cluster
 bootstrap (clusters = case for ruling questions; every other question is its
 own cluster), 10,000 resamples.
 
+The last section (false refusals, evidence chunk recall) is exploratory and not
+part of the pre-registration. It runs after the pre-registered sections, so
+their bootstrap draws and numbers are unchanged.
+
 Run from the project root:
   python eval/analyze_v3.py                       # uses eval/qa_pairs_v3.jsonl
   python eval/analyze_v3.py --review path/to/v3_review_edit_2.csv   # fallback
@@ -19,6 +23,7 @@ from pathlib import Path
 SEED = 20261017
 N_BOOT = 10000
 SYSTEMS = ["base", "base_rerun", "ep1", "dpo", "nocase", "snip1000", "nocalc", "stripped"]
+REFUSAL = "not covered in the provided documents"  # same check as eval_v2.EXPECTED_REFUSAL
 
 
 def strat_of(qid):
@@ -48,12 +53,13 @@ def load_clusters(qa_path, review_path):
 
 
 def load_results(res_dir, tag):
+    """id -> full result row."""
     f = Path(res_dir) / f"results_ev3_{tag}.csv"
     out = {}
     for r in csv.DictReader(open(f, encoding="utf-8-sig")):
         if r["answer_correct"] == "":
             sys.exit(f"{f}: ungraded row {r['id']}")
-        out[r["id"]] = 1 if r["answer_correct"] == "True" else 0
+        out[r["id"]] = r
     return out
 
 
@@ -89,7 +95,8 @@ def main():
     a = ap.parse_args()
 
     clusters = load_clusters(a.qa, a.review)
-    res = {t: load_results(a.results, t) for t in SYSTEMS}
+    rows = {t: load_results(a.results, t) for t in SYSTEMS}
+    res = {t: {i: 1 if r["answer_correct"] == "True" else 0 for i, r in d.items()} for t, d in rows.items()}
     ids = sorted(res["base"])
     missing = [i for i in ids if i not in clusters]
     if missing:
@@ -147,6 +154,41 @@ def main():
     p("\n## H3: DPO vs SFT (ep1)")
     compare("DPO effect", "ep1", "dpo", ["ruling_unseen", "ALL"] + [s for s in strata if s != "ruling_unseen"])
     p("\nH2 and H3 are the confirmatory tests (unseen-ruling row). All other rows are exploratory.")
+
+    # Exploratory diagnostics, not pre-registered. Must stay after the sections
+    # above: it draws from the same rng, and moving it would change their intervals.
+    answerable = {k: [i for i in v if strat_of(i) != "noanswer"] for k, v in subsets.items() if k != "noanswer"}
+    p("\n## Exploratory: false refusals (not pre-registered)")
+    p('Share of answerable questions (every stratum except noanswer) where the answer is the '
+      'refusal "Not covered in the provided documents". Lower is better. Correctness scoring '
+      "can't separate a refusal from a wrong answer; this can.")
+    p("| system | " + " | ".join(answerable) + " |")
+    p("|---|" + "---|" * len(answerable))
+    for t in SYSTEMS:
+        refused = {i: 1 if REFUSAL in r["answer"].lower() else 0 for i, r in rows[t].items()}
+        cells = []
+        for k, v in answerable.items():
+            m, lo, hi = boot_ci(v, refused, clusters, rng)
+            cells.append(f"{100*m:.1f} [{100*lo:.1f}, {100*hi:.1f}] ({sum(refused[i] for i in v)}/{len(v)})")
+        p(f"| {t} | " + " | ".join(cells) + " |")
+
+    labelled = [i for i in ids if rows["base"][i]["evidence_retrieved"] in ("visible", "truncated", "missing")]
+    with_ev = {k: [i for i in v if i in set(labelled)] for k, v in subsets.items()}
+    with_ev = {k: v for k, v in with_ev.items() if v}
+    p("\n## Exploratory: evidence chunk recall (not pre-registered)")
+    p("Share of questions with a gold evidence chunk where that chunk was among the retrieved "
+      "chunks. Higher is better. Measured on the chunk ID, so it does not see the context snippet "
+      "cut-off: the snip1000 ablation keeps the same recall while losing accuracy.")
+    p("retrieval_hit is not reported: passes by construction on 171/236 questions; replaced by evidence recall.")
+    p("| system | " + " | ".join(with_ev) + " |")
+    p("|---|" + "---|" * len(with_ev))
+    for t in SYSTEMS:
+        hit = {i: 1 if rows[t][i]["evidence_retrieved"] in ("visible", "truncated") else 0 for i in labelled}
+        cells = []
+        for k, v in with_ev.items():
+            m, lo, hi = boot_ci(v, hit, clusters, rng)
+            cells.append(f"{100*m:.1f} [{100*lo:.1f}, {100*hi:.1f}] ({sum(hit[i] for i in v)}/{len(v)})")
+        p(f"| {t} | " + " | ".join(cells) + " |")
 
     if a.out:
         Path(a.out).write_text("\n".join(lines) + "\n")

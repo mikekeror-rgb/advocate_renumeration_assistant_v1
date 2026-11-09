@@ -236,7 +236,6 @@ moved to Groq so it could be deployed on Streamlit Community Cloud.
 
 | Metric | How it's measured | Deterministic? |
 |---|---|---|
-| Retrieval hit | A retrieved chunk contains the expected phrase (statutes) or comes from the expected case (rulings) | Yes |
 | Evidence retrieved | The answer-bearing passage was retrieved and falls inside the part of the chunk the generator sees | Yes |
 | Numeric exact match | The calculator produced the expected figure | Yes |
 | Answer states figure | The visible answer text contains the expected figure | Yes |
@@ -264,7 +263,6 @@ the live demo's model):
 | Answer correct | 24/24 |
 | Numeric accuracy | 8/8 |
 | Answer states figure | 8/8 |
-| Retrieval hit rate | 24/24 |
 | Citation accuracy | 16/18 answers that cite a chunk |
 | Avg. faithfulness | 5.00 (23 answers; the guard row is not judged) |
 

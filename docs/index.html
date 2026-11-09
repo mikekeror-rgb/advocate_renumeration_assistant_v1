@@ -204,19 +204,19 @@ footer { border-top: 1px solid var(--line); padding-top: 22px; font-size: 0.95re
 
   <section>
     <h2>Where the errors come from</h2>
-    <p>On the 117 ruling questions, the gold evidence was among the retrieved chunks 98.3% of the time for the base system (115 of 117). Retrieval is not the bottleneck. Cutting snippets to 1,000 characters left that figure unchanged at 98.3%, yet cost 26.1 points on unseen rulings. The evidence was retrieved but, as far as these data show, the shortened snippet no longer carried the answer.</p>
+    <p>On the 117 ruling questions, the gold evidence chunk was among the retrieved chunks 78.6% of the time for the base system (92 of 117), and it was missing for 14 of the 25 ruling questions the base system got wrong. Retrieval misses are a major source of error. They are not the only one: cutting snippets to 1,000 characters left recall unchanged at 78.6%, yet cost 26.1 points on unseen rulings. There the evidence was retrieved but, as far as these data show, the shortened snippet no longer carried the answer.</p>
     <div class="tablewrap">
       <table>
-        <caption>Ruling questions only (n = 117). Retrieval hit: the harness's flag that the gold evidence was retrieved. Faithfulness: the judge's 1 to 5 score, mean. Descriptive only; no intervals computed.</caption>
-        <thead><tr><th>System</th><th>Retrieval hit, %</th><th>Faithfulness, mean</th></tr></thead>
+        <caption>Ruling questions only (n = 117). Evidence recall: the gold evidence chunk was among the retrieved chunks. Faithfulness: the judge's 1 to 5 score, mean. Descriptive only; no intervals computed.</caption>
+        <thead><tr><th>System</th><th>Evidence recall, %</th><th>Faithfulness, mean</th></tr></thead>
         <tbody>
-          <tr><td>base</td><td>98.3</td><td>4.59</td></tr>
-          <tr><td>ep1 (SFT)</td><td>98.3</td><td>4.59</td></tr>
-          <tr><td>dpo</td><td>98.3</td><td>4.47</td></tr>
-          <tr><td>nocase</td><td>94.9</td><td>4.47</td></tr>
-          <tr><td>snip1000</td><td>98.3</td><td>4.41</td></tr>
-          <tr><td>nocalc</td><td>99.1</td><td>4.74</td></tr>
-          <tr><td>stripped</td><td>95.7</td><td>4.28</td></tr>
+          <tr><td>base</td><td>78.6</td><td>4.59</td></tr>
+          <tr><td>ep1 (SFT)</td><td>78.6</td><td>4.59</td></tr>
+          <tr><td>dpo</td><td>78.6</td><td>4.47</td></tr>
+          <tr><td>nocase</td><td>67.5</td><td>4.47</td></tr>
+          <tr><td>snip1000</td><td>78.6</td><td>4.41</td></tr>
+          <tr><td>nocalc</td><td>79.5</td><td>4.74</td></tr>
+          <tr><td>stripped</td><td>68.4</td><td>4.28</td></tr>
         </tbody>
       </table>
     </div>
