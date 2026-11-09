@@ -34,7 +34,9 @@ Writes: eval/results.csv, or eval/results_<EVAL_TAG>.csv, and prints a summary.
 Run from the project root: `python eval/eval_v2.py`
 Env:
   PIPELINE_MODULE  rag_pipeline_v2 (default) | rag_pipeline
-  JUDGE_MODEL      qwen2.5:7b (default, local Ollama) | e.g. gpt-5.4-mini
+  JUDGE_MODEL      qwen2.5:7b (default, local Ollama) | e.g. gpt-5.4-mini | none
+                   none = skip the LLM judge: answers and deterministic checks are saved,
+                   with the judge's context, and eval/grade_results.py grades them later.
   EVAL_TAG         label for the results file, e.g. groq_baseline, qwen_vllm, qwen_lora
   EVAL_ONLY        comma-separated ids for a quick subset run, e.g. ruling_02,ruling_05
   QA_FILE          question file (default eval/qa_pairs.jsonl), e.g. eval/qa_pairs_v2.jsonl
@@ -76,6 +78,8 @@ EVAL_ONLY = {i.strip() for i in os.environ.get("EVAL_ONLY", "").split(",") if i.
 # e.g. JUDGE_MODEL=gpt-5.4-mini. See README for why this is worth doing: the two
 # judges disagreed noticeably on several questions in this project's own eval runs.
 JUDGE_MODEL_NAME = os.environ.get("JUDGE_MODEL", "qwen2.5:7b")
+JUDGE_DEFERRED = JUDGE_MODEL_NAME.lower() == "none"
+NOT_JUDGED = "Not judged yet (JUDGE_MODEL=none); grade with eval/grade_results.py."
 
 # Every 'chunk_id: X' citation, whether the model used [ ] or 【 】 brackets.
 CITED_CHUNK_ID_PATTERN = citations.CITED_CHUNK_ID_PATTERN
@@ -278,6 +282,8 @@ def _parse_judge_json(raw: str) -> dict | None:
 def judge_faithfulness(question: str, answer: str, context_summary: str) -> tuple[int, str]:
     """Is the answer fully supported by the context it was given? Returns
     (score 1-5, reasoning), or (0, error) if the judge's reply isn't parseable."""
+    if JUDGE_DEFERRED:
+        return 0, NOT_JUDGED
     judge_prompt = f"""You are grading a RAG system's answer for faithfulness to its own context.
 
 Question: {question}
@@ -301,6 +307,8 @@ Respond with ONLY a JSON object, no other text: {{"score": <int 1-5>, "reasoning
 def judge_correctness(question: str, answer: str, reference: str) -> tuple[bool | None, str]:
     """Reference-based: does the answer state the same key facts as the expected
     answer? Returns (True/False, reasoning), or (None, error) if unparseable."""
+    if JUDGE_DEFERRED:
+        return None, NOT_JUDGED
     judge_prompt = f"""You are grading whether a legal research assistant's answer is CORRECT, \
 compared with a reference answer written by an expert.
 
@@ -417,18 +425,22 @@ def run_eval():
             "faithfulness_reasoning": faithfulness_reasoning,
             # Logged so citation checks can be re-scored later without re-running the model.
             "retrieved_chunk_ids": json.dumps([c["chunk_id"] for c in retrieved_chunks]),
+            # Exactly what the judge would have seen, so grading later is identical.
+            "judge_context": context_summary if JUDGE_DEFERRED else "",
         })
+        write_results(rows, quiet=True)  # save progress after every question
 
     write_results(rows)
     print_summary(rows)
 
 
-def write_results(rows: list[dict]) -> None:
+def write_results(rows: list[dict], quiet: bool = False) -> None:
     with open(RESULTS_PATH, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         writer.writeheader()
         writer.writerows(rows)
-    print(f"\nWrote {len(rows)} results to {RESULTS_PATH}")
+    if not quiet:
+        print(f"\nWrote {len(rows)} results to {RESULTS_PATH}")
 
 
 def print_summary(rows: list[dict]) -> None:
@@ -453,7 +465,7 @@ def print_summary(rows: list[dict]) -> None:
         print(f"  ✗ Incorrect: {', '.join(wrong)}")
     ungraded = [r["id"] for r in rows if r["answer_correct"] is None]
     if ungraded:
-        print(f"  ? Not graded (judge unparseable): {', '.join(ungraded)}")
+        print(f"  ? Not graded (judge skipped or unparseable): {', '.join(ungraded)}")
 
 
     evidence_rows = [r for r in rows if r["evidence_retrieved"] is not None]
