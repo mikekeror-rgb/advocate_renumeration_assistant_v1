@@ -5,7 +5,7 @@ Paired differences between systems, 95% percentile intervals from a cluster
 bootstrap (clusters = case for ruling questions; every other question is its
 own cluster), 10,000 resamples.
 
-The last section (false refusals, evidence chunk recall) is exploratory and not
+The last sections (false refusals, evidence chunk recall, invented citations) are exploratory and not
 part of the pre-registration. It runs after the pre-registered sections, so
 their bootstrap draws and numbers are unchanged.
 
@@ -19,6 +19,9 @@ import json
 import random
 import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import citations  # noqa: E402
 
 SEED = 20261017
 N_BOOT = 10000
@@ -189,6 +192,17 @@ def main():
             m, lo, hi = boot_ci(v, hit, clusters, rng)
             cells.append(f"{100*m:.1f} [{100*lo:.1f}, {100*hi:.1f}] ({sum(hit[i] for i in v)}/{len(v)})")
         p(f"| {t} | " + " | ".join(cells) + " |")
+
+    corpus = citations.load_corpus()
+    p("\n## Exploratory: invented citations (not pre-registered)")
+    p("Answers citing a chunk ID that names a real document but a section it doesn't have "
+      "(e.g. __s10__c1 for a ruling whose chunks end at s2). Counted from the answer text "
+      "against data/chunks.jsonl, so it needs no retrieval log. Lower is better.")
+    p("| system | answers with an invented citation |")
+    p("|---|---|")
+    for t in SYSTEMS:
+        n = sum(bool(citations.citations_invented(r["answer"], corpus)) for r in rows[t].values())
+        p(f"| {t} | {n} |")
 
     if a.out:
         Path(a.out).write_text("\n".join(lines) + "\n")

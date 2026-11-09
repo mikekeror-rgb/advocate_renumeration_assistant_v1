@@ -240,7 +240,8 @@ moved to Groq so it could be deployed on Streamlit Community Cloud.
 | Numeric exact match | The calculator produced the expected figure | Yes |
 | Answer states figure | The visible answer text contains the expected figure | Yes |
 | Calculator routing | The router fired exactly when it should | Yes |
-| Citation verifiable | Every cited chunk ID was actually retrieved for that question | Yes |
+| Citation verifiable | Every cited chunk ID names a chunk that was retrieved for that question, ignoring differences in case, spacing and punctuation | Yes |
+| Citation invented | A cited chunk ID names a real document but a section it doesn't have | Yes |
 | Guard correct | Guard questions got the deterministic guard message, not a model answer | Yes |
 | Answer correct | Matches the expected answer: checked in code for numeric, no-answer and guard questions, by an LLM judge against the reference for factual ones | Partly |
 | Faithfulness (1–5) | An LLM judge rates support by the retrieved context | No |
@@ -315,7 +316,7 @@ final answer text.
   attendances and disbursements. It downloads as CSV or Markdown and shows the
   supporting chunks of the Order.
 - **Eval results:** metrics and charts from `eval/results.csv`, including any
-  fabricated citations.
+  unverifiable or invented citations.
 
 ---
 

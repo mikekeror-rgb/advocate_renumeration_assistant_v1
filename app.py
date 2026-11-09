@@ -23,6 +23,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+import citations
 import fee_calculator as fc
 import fee_router
 import feedback
@@ -36,6 +37,17 @@ MAX_SUGGESTIONS_PER_SESSION = 3  # basic spam limit for the public suggestions b
 @st.cache_resource
 def load_pipeline() -> RagPipeline:
     return RagPipeline()
+
+
+@st.cache_resource
+def load_corpus() -> citations.ChunkIndex:
+    return citations.load_corpus()
+
+
+def count_invented(answers: pd.Series) -> int:
+    """Answers citing a section that doesn't exist in the document they name."""
+    corpus = load_corpus()
+    return sum(bool(citations.citations_invented(a, corpus)) for a in answers.fillna(""))
 
 
 def render_sources(retrieved: list[dict]) -> None:
@@ -349,7 +361,7 @@ with tab_eval:
                 "Correctness": f"{bool_values(d['answer_correct']).mean():.1%}",
                 "False refusals": f"{refused[answerable].mean():.1%}",
                 "Evidence recall": f"{evidence.isin(EVIDENCE_FOUND).mean():.1%}",
-                "Unverifiable citations": int((~bool_values(d["citation_verifiable"])).sum()),
+                "Invented citations": count_invented(d["answer"]),
             })
         st.dataframe(pd.DataFrame(summary).set_index("System"), use_container_width=True)
         st.caption(
@@ -372,20 +384,19 @@ with tab_eval:
         for name, path in experiment.items():
             d = pd.read_csv(path)
             correct = bool_values(d["answer_correct"]) if "answer_correct" in d else pd.Series(dtype=bool)
-            cites = bool_values(d["citation_verifiable"])
             named = bool_values(d["cites_named_case"]) if "cites_named_case" in d else pd.Series(dtype=bool)
             judged = d["faithfulness_score"][d["faithfulness_score"] > 0]
             summary.append({
                 "Model": name,
                 "Correctness": f"{correct.mean():.1%}" if len(correct) else "—",
-                "Fabricated citations": int((~cites).sum()),
+                "Invented citations": count_invented(d["answer"]),
                 "Cites the case asked about": f"{named.mean():.1%}" if len(named) else "—",
                 "Avg faithfulness (1-5)": round(judged.mean(), 2) if len(judged) else None,
             })
         st.dataframe(pd.DataFrame(summary).set_index("Model"), use_container_width=True)
         st.caption(
             "62 questions, 33 of them from rulings the models never saw in training. Fine-tuning removed "
-            "fabricated citations; correctness differences of one or two questions are within run-to-run noise. "
+            "invented citations; correctness differences of one or two questions are within run-to-run noise. "
             "The live assistant uses Groq unless a self-hosted server is configured."
         )
 
@@ -414,12 +425,12 @@ with tab_eval:
             cols[2].metric("Numeric accuracy", f"{bool_values(numeric_df['numeric_exact_match']).mean():.0%}")
 
         cites = bool_values(df["citation_verifiable"])
-        fabricated = int((~cites).sum())
+        unverifiable = int((~cites).sum())
         if len(cites):
             cols[3].metric(
                 "Citation accuracy",
                 f"{cites.mean():.0%}",
-                delta=f"-{fabricated} fabricated" if fabricated else None,
+                delta=f"-{unverifiable} unverifiable" if unverifiable else None,
                 delta_color="inverse",
             )
 
@@ -430,7 +441,9 @@ with tab_eval:
         st.caption(
             "Faithfulness is LLM-judged and should be read as a rough secondary signal — "
             "evidence recall, numeric accuracy, and citation accuracy above are deterministic "
-            "and more reliable on their own."
+            "and more reliable on their own. Runs without a retrieved_chunk_ids column used an "
+            "exact-match citation check, which also rejected real chunks written with different "
+            "spelling or spacing, so their citation accuracy is understated."
         )
 
         chart_col1, chart_col2 = st.columns(2)
@@ -445,8 +458,8 @@ with tab_eval:
             else:
                 st.caption("This run has no evidence labels.")
 
-        if fabricated:
-            st.markdown("#### ⚠ Fabricated citations")
+        if unverifiable:
+            st.markdown("#### ⚠ Unverifiable citations")
             bad_ids = cites[~cites].index
             st.dataframe(df.loc[bad_ids, ["id", "answer"]], use_container_width=True)
 
