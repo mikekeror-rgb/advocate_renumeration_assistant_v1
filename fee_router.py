@@ -11,6 +11,7 @@ number) instead of asking the LLM to retrieve-and-compute or state a schedule fi
 import re
 from dataclasses import dataclass, field
 
+import case_matcher
 import fee_calculator as fc
 
 
@@ -173,11 +174,16 @@ _FEE_DOMAIN = re.compile(
     re.IGNORECASE,
 )
 
+def asks_for_calculation(text: str) -> bool:
+    """True when the question asks for a figure to be computed, not just mentions one."""
+    return bool(_CALC_INTENT.search(text))
+
+
 def calculation_guard(text: str) -> str | None:
     """For questions that ask for a calculation route() couldn't handle.
     Returns a message to show instead of letting the LLM compute: evals showed
     every model (Qwen and gpt-oss-20b) copied figures from retrieved rulings."""
-    if not _CALC_INTENT.search(text):
+    if not asks_for_calculation(text):
         return None
     if classify_scenario(text) is None:
         if not _FEE_DOMAIN.search(text):
@@ -375,3 +381,14 @@ if __name__ == "__main__":
             print(f"  -> GUARD: {guard}")
         else:
             print("  -> No route (falls back to normal RAG retrieval)")
+
+
+def route_question(text: str, case_index: dict[str, list[str]]) -> RouteResult | None:
+    """route(), except for questions about a named ruling that quote the ruling's own
+    figures ("why was the instruction fee of Kshs 120,000 manifestly excessive?").
+    Those are questions about the case, not fee calculations, so they go to retrieval
+    unless they explicitly ask for a calculation."""
+    result = route(text)
+    if result is not None and not asks_for_calculation(text) and case_matcher.match_cases(text, case_index):
+        return None
+    return result

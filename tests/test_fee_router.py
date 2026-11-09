@@ -2,6 +2,7 @@
 
 import pytest
 
+import case_matcher
 import fee_router
 
 
@@ -105,3 +106,35 @@ def test_guard_still_catches_calculation_requests(question):
 def test_out_of_domain_questions_go_to_retrieval(question):
     assert fee_router.route(question) is None
     assert fee_router.calculation_guard(question) is None
+
+
+_CASE_INDEX = case_matcher.build_case_index([
+    "Mwananchi Credit Limited v Mwangi (Civil Appeal E064of2021) 2026KEHC1076(KLR) (5February2026) (Ruling)",
+    "Brook Villas Estate Limited v Gatu another (Environment Land Case 25of2016) 2024KEELC5627(KLR) (25July2024) (Ruling)",
+])
+
+
+@pytest.mark.parametrize("question", [
+    # Regressions (v3_unseen_named_022, v3_seen_named_011): questions about a named
+    # ruling that quote its figures were sent to the calculator
+    "In Mwananchi Credit Limited v Mwangi, what was the stated reason for the instruction "
+    "fee of Kshs 120,000/= being considered manifestly excessive?",
+    "In Brook Villas Estate Limited v Gatu another (Environment Land Case 25of2016), what value "
+    "did the Applicant argue the subject matter of the reference was, as opposed to the whole "
+    "value of Kshs.84,000,000?",
+])
+def test_questions_about_a_named_ruling_go_to_retrieval(question):
+    assert fee_router.route(question) is not None, "route() alone still fires; route_question must not"
+    assert fee_router.route_question(question, _CASE_INDEX) is None
+
+
+def test_named_ruling_with_an_explicit_calculation_request_still_routes():
+    question = ("In Mwananchi Credit Limited v Mwangi, calculate the High Court instruction fee "
+                "for a defended suit worth Kshs 907,814")
+    result = fee_router.route_question(question, _CASE_INDEX)
+    assert result is not None and result.scenario == "schedule6"
+
+
+def test_calculation_without_a_named_ruling_is_unchanged():
+    question = "What is the High Court instruction fee for a defended suit worth Kshs 3,500,000?"
+    assert fee_router.route_question(question, _CASE_INDEX).fee == pytest.approx(170000)

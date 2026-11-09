@@ -323,7 +323,7 @@ class RagPipeline:
         return self.retrieve(query)
 
     def answer(self, query: str, top_k: int = TOP_K) -> dict:
-        route_result = None if DISABLE_CALCULATOR else fee_router.route(query)#route_result = fee_router.route(query)
+        route_result = None if DISABLE_CALCULATOR else fee_router.route_question(query, self._case_index)
 
         # A full itemized bill is already complete and verified — return it
         # directly. Sending a large table through the LLM risks mangled figures
