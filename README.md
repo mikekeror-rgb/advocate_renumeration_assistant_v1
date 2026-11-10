@@ -158,6 +158,14 @@ RERANK_POOL=50 python eval/retrieval_eval.py --tag rerank --depths ""
 
 Answers can also be generated on a GPU now and graded later: run `eval/eval_v2.py` with `JUDGE_MODEL=none`, then `python eval/grade_results.py <results.csv>`, which resumes if it stops.
 
+**Flaws found in the evaluation itself, and fixed:**
+
+- **Retrieval hit passed by construction on 72% of questions** (171 of 236): it counted any chunk of the right type as a hit. It reported 98.3% on ruling questions where the gold passage was retrieved for 78.6%. Replaced by gold-chunk recall (evidence recall) in every report.
+- **The faithfulness judge rewarded wrong refusals.** It scored 7 of base's 10 wrong "Not covered" answers 5/5. False-refusal rate on answerable questions is now reported alongside it.
+- **The citation check was stricter than the citations.** Exact matching flagged real, retrieved chunks when the model corrected the corpus's misspelling ("Renumeration"). Matching now ignores formatting, and invented citations (a section the cited ruling doesn't have) are counted separately: 6 answers, not 11, on the 62-question set.
+
+The checks that caught these are packaged as a reusable Claude Code skill: [rag-eval-harness](https://github.com/mikekeror-rgb/rag-eval-harness).
+
 ## Load benchmark
 
 RTX 4090, ~3,500-token prompts, 256-token answers. Every request uses a unique prompt: an early run reused prompts and prefix caching made TTFT look like 85 ms at 8 users.
@@ -232,6 +240,7 @@ Python · pdfplumber · sentence-transformers (bge-small-en-v1.5) · ChromaDB ·
 
 ## Related work
 
+- [rag-eval-harness](https://github.com/mikekeror-rgb/rag-eval-harness): a Claude Code skill that adds an evaluation harness to a RAG app, including the metric checks that found the flaws above.
 - [hybrid-retrieval-eval](https://github.com/mikekeror-rgb/hybrid-retrieval-eval): this project's hybrid retrieval, extracted into a reusable ZenML pipeline and proposed to ZenML's rag-recipes (issue #2).
 - DeepEval PR #3375: fix for misleading "invalid JSON" errors from reasoning-model judges, found through this project's own empty-output bug.
 - DeepEval issue #3376: proposed catching fabricated `[N]` citations deterministically; implemented by another contributor in PR #3378.
