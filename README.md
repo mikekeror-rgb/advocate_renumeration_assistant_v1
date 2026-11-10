@@ -19,6 +19,7 @@ The live demo runs a hosted model (gpt-oss-20b on Groq). The self-hosted Qwen2.5
 - On the earlier 62-question set, QLoRA SFT eliminated invented citations (chunk IDs naming a section that doesn't exist: 6 answers to 0) at parity or better on correctness. On the 236-question v3 set the pattern held: 9 answers for base, 0 for SFT and DPO (exploratory).
 - On-policy DPO (81 pairs mined from the SFT model's own mistakes) reached 92% preference accuracy on held-out pairs and gave the best case attribution, but no measurable correctness gain at n=62.
 - The remaining errors are dominated by retrieval misses shared by every model.
+- After the pre-registered test (exploratory, in-sample): cross-encoder re-ranking raised accuracy from 89.4% to 93.6% (+4.2 [+0.4, +8.2] points), and from 75.4% to 88.4% on unseen rulings, and cut false "Not covered" refusals from 10 to 1. It is off by default because it is too slow on a CPU.
 - One RTX 4090 serves about 8 concurrent users on this workload, with 2-7% LoRA overhead.
 
 ## What it does
@@ -57,7 +58,7 @@ flowchart LR
 ```
 
 - **Ingestion:** 210 PDFs (the Order plus ~209 Kenya Law rulings) are cleaned, split by section, chunked and tagged with case metadata; the Order's fee tables are extracted separately.
-- **Retrieval:** dense search (BAAI/bge-small-en-v1.5 + ChromaDB), a statute-only dense search and BM25 are fused with Reciprocal Rank Fusion. When a question names a ruling, retrieval is scoped to that ruling and its chunks are pinned first. The dense component follows the dense passage retrieval approach of Karpukhin et al. (2020); see the [documentation](docs/DOCUMENTATION.md) for what was and wasn't replicated.
+- **Retrieval:** dense search (BAAI/bge-small-en-v1.5 + ChromaDB), a statute-only dense search and BM25 are fused with Reciprocal Rank Fusion. When a question names a ruling, retrieval is scoped to that ruling and its chunks are pinned first. Optionally (`RERANK_POOL=50`, off by default), a larger candidate pool is re-ranked by a cross-encoder (BAAI/bge-reranker-base) before the same final cut. The dense component follows the dense passage retrieval approach of Karpukhin et al. (2020); see the [documentation](docs/DOCUMENTATION.md) for what was and wasn't replicated.
 - **Calculation:** a regex router detects computable fee questions and sends them to the fee calculator.
 - **Generation:** `llm_client.py` points the same pipeline at Groq, vLLM, Ollama or TGI by changing `LLM_BASE_URL`, `LLM_API_KEY` and `LLM_MODEL`.
 
@@ -118,7 +119,7 @@ Effects with 95% intervals (cluster bootstrap by case, 10,000 resamples):
 - Retrieval found the gold evidence chunk for 78.6% of ruling questions (92 of 117), and it was missing for 14 of the 25 ruling questions the base model got wrong. Cutting snippets to 1,000 characters left that figure unchanged but cost 26.1 points on unseen rulings, so losses come both from retrieval misses and from context truncation after retrieval.
 - Exploratory, not pre-registered: base cited a chunk that doesn't exist (a real ruling, but a section number it doesn't have) in 9 of 236 answers, as did its identical rerun; SFT and DPO did so in none.
 - A hand re-judging of 30 random answers agreed with the judge on all 30 (13 of them model-judged; see [`eval/judge_handcheck.csv`](eval/judge_handcheck.csv)).
-- The fee router and guard misfired on 6 of 236 questions (about 2.5%) by returning a fixed fee message to a question that was not a fee calculation. Tightening their triggers is the clearest next improvement.
+- The fee router and guard misfired on 6 of 236 questions (about 2.5%) by returning a fixed fee message to a question that was not a fee calculation. This was fixed afterwards; see below.
 - Answer latency per question (pipeline only, 40 mixed questions, one run): 2.10 s median with the full pipeline, 2.03 s without case scoping, 1.83 s with 1,000-character snippets, 2.83 s with the router and guard off.
 
 Full tables with intervals are in [`eval/v3_results.md`](eval/v3_results.md); raw per-question results are `eval/results_ev3_*.csv`. To reproduce, point `LLM_BASE_URL` and `LLM_API_KEY` at a vLLM server serving the base model and both adapters, then:
@@ -127,6 +128,35 @@ Full tables with intervals are in [`eval/v3_results.md`](eval/v3_results.md); ra
 ./run_v3_eval.sh                                   # refuses to run if the set's hash differs
 python eval/analyze_v3.py --out eval/v3_results.md
 ```
+
+### After the pre-registered test (exploratory)
+
+These changes were chosen by looking at v3's failures, so v3 no longer measures how they generalise: the gains below are in-sample, not pre-registered. Each was measured as a paired comparison (the same code, settings and judge, with only the change switched on or off) on Kaggle (2× T4, fp16), so the numbers are comparable with each other but not with the RTX 4090 runs above.
+
+**Router fixes.** Case citations such as `2026KEHC13078` were read as fee amounts, and the guard fired on questions *about* calculation rules. Fixing both took the base model from 206 to 213 of 236 (`eval/results_ev3_t4_main.csv`, `eval/results_ev3_t4_routerfix.csv`); the six misfires all became correct and the other changes were noise.
+
+**Cross-encoder re-ranking.** Dense and BM25 search each fetch 50 candidates instead of 5 and 3; after fusion, `BAAI/bge-reranker-base` re-orders them, and the same seven chunks go to the model.
+
+| | Without re-ranking | With re-ranking | Difference [95% interval] |
+|---|---|---|---|
+| All questions | 211/236 (89.4%) | 221/236 (93.6%) | +4.2 [+0.4, +8.2] |
+| Unseen rulings | 52/69 (75.4%) | 61/69 (88.4%) | +13.0 [+4.1, +21.1] |
+| False "Not covered" refusals (of 180 answerable) | 10 | 1 | |
+| Gold evidence chunk retrieved (of 140) | 80.0% | 90.0% | |
+| Invented citations | 9 | 10 | |
+
+17 answers got better and 7 worse (sign test p = 0.064), so this is one promising run, not a settled result. Of the 7 losses, about 3 came from the re-ranker filling the context with near-duplicates (a neighbouring fee-table row, other passages from the same judgment), and about 4 look like noise, including one where the judge graded two near-identical answers differently. The re-ranker takes about 14 s per question on a laptop CPU, so it stays off in the live demo; on a GPU it is fast. Results: `eval/results_ev3_t4_rr_off.csv`, `eval/results_ev3_t4_rr_on.csv`.
+
+Two variants did not help, measured with the retrieval-only harness: a small re-ranker (`ms-marco-MiniLM-L-6-v2`) lowered gold-chunk recall from 80.0% to 75.7%, and capping the context at two or three chunks per document cost 4 to 6 gold chunks the re-ranker had found (`eval/retrieval_*.csv`).
+
+The retrieval-only harness runs the retrieval step alone, with no model or judge, and its 90.0% recall matched the full Kaggle run exactly. That makes it a cheap first test for retrieval changes:
+
+```bash
+python eval/retrieval_eval.py --tag baseline                         # about 30 s on a laptop
+RERANK_POOL=50 python eval/retrieval_eval.py --tag rerank --depths ""
+```
+
+Answers can also be generated on a GPU now and graded later: run `eval/eval_v2.py` with `JUDGE_MODEL=none`, then `python eval/grade_results.py <results.csv>`, which resumes if it stops.
 
 ## Load benchmark
 
@@ -182,7 +212,7 @@ Requires an NVIDIA GPU and the adapter in `./adapters` (or download it from the 
 | `fee_router.py`, `case_matcher.py` | Calculator routing, input guard, case-scoped retrieval |
 | `llm_client.py` | Backend switch |
 | `training/` | Data builder, QLoRA SFT, DPO pair mining, DPO trainer |
-| `eval/` | Eval harness, question sets, results CSVs, v3 pre-registration (`PREREG.md`) and analysis (`analyze_v3.py`, `v3_results.md`) |
+| `eval/` | Eval harness, question sets, results CSVs, v3 pre-registration (`PREREG.md`) and analysis (`analyze_v3.py`, `v3_results.md`), retrieval-only harness (`retrieval_eval.py`), deferred grading (`grade_results.py`) |
 | `docs/` | Research report (`report.pdf`) and the portfolio page (`index.html`, served by GitHub Pages) |
 | `run_v3_eval.sh`, `time_pipeline.sh` | v3 evaluation run and per-setting latency timing |
 | `scripts/`, `bench.py` | vLLM, Ollama and TGI serving scripts, load benchmark |
