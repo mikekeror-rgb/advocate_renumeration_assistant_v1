@@ -67,9 +67,11 @@ def main():
     rows = []
     for q in questions:
         gold = q["evidence_chunk_id"]
-        ids = [c["chunk_id"] for c in pipeline.retrieve(q["question"])]
+        chunks = pipeline.retrieve(q["question"])
+        ids = [c["chunk_id"] for c in chunks]
         row = {"id": q["id"], "stratum": stratum_of(q), "k": len(ids),
-               "hit": gold in ids, "rank": ids.index(gold) + 1 if gold in ids else None}
+               "hit": gold in ids, "rank": ids.index(gold) + 1 if gold in ids else None,
+               "n_docs": len({c["doc_title"] for c in chunks})}
         for n in depths:
             row[f"pool@{n}"] = gold in [c["chunk_id"] for c in pipeline.retrieve(q["question"], top_k=n)]
         rows.append(row)
@@ -91,6 +93,7 @@ def main():
         print(f"{s:16s}" + "".join(f"{c:>22s}" for c in cells))
     mrr = sum(1 / r["rank"] for r in rows if r["rank"]) / len(rows)
     print(f"MRR (within k): {mrr:.3f}")
+    print(f"Distinct documents per context: {sum(r['n_docs'] for r in rows) / len(rows):.2f} (mean)")
 
     if a.compare:
         logged = {r["id"]: r for r in csv.DictReader(open(a.compare))}
