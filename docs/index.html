@@ -105,6 +105,8 @@ code { background: var(--accent-soft); padding: 1px 6px; border-radius: 4px; wor
 
 .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
 table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 0.9rem; }
+table.fit { min-width: 0; } /* few columns: fits a phone without scrolling */
+table.fit .ci { white-space: nowrap; }
 th, td { padding: 9px 12px; text-align: right; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
 th:first-child, td:first-child { text-align: left; font-family: var(--font-mono); font-size: 0.82rem; }
 thead th { font-family: var(--font-display); font-weight: 600; font-size: 0.82rem; color: var(--muted); }
@@ -226,14 +228,14 @@ footer { border-top: 1px solid var(--line); padding-top: 22px; font-size: 0.95re
     <h2>After the test: re-ranking retrieval</h2>
     <p>The table above pointed at retrieval, so after the pre-registered test I tried re-ranking: dense and keyword search each fetch 50 candidates instead of 5 and 3, and a cross-encoder (BAAI/bge-reranker-base) picks which ones fill the same seven slots in the prompt. This is exploratory. I chose it by looking at v3's failures, so the gain is in-sample, and both arms ran once, on different hardware from the pre-registered runs (2× T4, fp16), with the same code, settings and judge.</p>
     <div class="tablewrap">
-      <table>
-        <caption>Base model, 236 v3 questions, paired runs that differ only in re-ranking. Interval: cluster bootstrap by case, 10,000 resamples.</caption>
-        <thead><tr><th></th><th>Without</th><th>With</th><th>Difference [95% interval]</th></tr></thead>
+      <table class="fit">
+        <caption>Base model, 236 v3 questions, paired runs that differ only in re-ranking. False refusals: answerable questions answered &ldquo;Not covered&rdquo;. Gold chunk found: the passage holding the answer was retrieved. Interval: cluster bootstrap by case, 10,000 resamples.</caption>
+        <thead><tr><th></th><th>Without</th><th>With</th><th>Change [95% CI]</th></tr></thead>
         <tbody>
-          <tr><td>Accuracy, all questions</td><td>89.4%</td><td>93.6%</td><td>+4.2 [+0.4, +8.2]</td></tr>
-          <tr><td>Accuracy, unseen rulings</td><td>75.4%</td><td>88.4%</td><td>+13.0 [+4.1, +21.1]</td></tr>
-          <tr><td>False &ldquo;Not covered&rdquo; refusals (of 180)</td><td>10</td><td>1</td><td></td></tr>
-          <tr><td>Gold evidence chunk retrieved (of 140)</td><td>80.0%</td><td>90.0%</td><td></td></tr>
+          <tr><td>accuracy, all</td><td>89.4%</td><td>93.6%</td><td>+4.2 <span class="ci">[+0.4, +8.2]</span></td></tr>
+          <tr><td>accuracy, unseen rulings</td><td>75.4%</td><td>88.4%</td><td>+13.0 <span class="ci">[+4.1, +21.1]</span></td></tr>
+          <tr><td>false refusals, of 180</td><td>10</td><td>1</td><td></td></tr>
+          <tr><td>gold chunk found, of 140</td><td>80.0%</td><td>90.0%</td><td></td></tr>
         </tbody>
       </table>
     </div>
