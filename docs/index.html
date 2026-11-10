@@ -223,6 +223,24 @@ footer { border-top: 1px solid var(--line); padding-top: 22px; font-size: 0.95re
   </section>
 
   <section>
+    <h2>After the test: re-ranking retrieval</h2>
+    <p>The table above pointed at retrieval, so after the pre-registered test I tried re-ranking: dense and keyword search each fetch 50 candidates instead of 5 and 3, and a cross-encoder (BAAI/bge-reranker-base) picks which ones fill the same seven slots in the prompt. This is exploratory. I chose it by looking at v3's failures, so the gain is in-sample, and both arms ran once, on different hardware from the pre-registered runs (2× T4, fp16), with the same code, settings and judge.</p>
+    <div class="tablewrap">
+      <table>
+        <caption>Base model, 236 v3 questions, paired runs that differ only in re-ranking. Interval: cluster bootstrap by case, 10,000 resamples.</caption>
+        <thead><tr><th></th><th>Without</th><th>With</th><th>Difference [95% interval]</th></tr></thead>
+        <tbody>
+          <tr><td>Accuracy, all questions</td><td>89.4%</td><td>93.6%</td><td>+4.2 [+0.4, +8.2]</td></tr>
+          <tr><td>Accuracy, unseen rulings</td><td>75.4%</td><td>88.4%</td><td>+13.0 [+4.1, +21.1]</td></tr>
+          <tr><td>False &ldquo;Not covered&rdquo; refusals (of 180)</td><td>10</td><td>1</td><td></td></tr>
+          <tr><td>Gold evidence chunk retrieved (of 140)</td><td>80.0%</td><td>90.0%</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:18px">Seventeen answers improved and seven got worse (sign test p = 0.064), so it is a promising single run rather than a settled result. About three of the seven losses came from the re-ranker crowding the context with near-duplicates, such as a neighbouring row of a fee table; the rest look like noise. A smaller, faster re-ranker and a cap on chunks per document both made retrieval worse. At about 14 seconds per question on a laptop CPU, the re-ranker stays off in the live demo; on a GPU it is fast.</p>
+  </section>
+
+  <section>
     <h2>What each component costs in latency</h2>
     <p>The components that protect accuracy add almost no time. Switching the calculator off made answers slower, not faster, so the deterministic path is both more accurate and cheaper.</p>
     <div class="tablewrap">
@@ -250,7 +268,7 @@ footer { border-top: 1px solid var(--line); padding-top: 22px; font-size: 0.95re
       <h2>What they do not show</h2>
       <p>That fine-tuning is useless. The unseen rulings come from only 14 cases, so a gain of a few points could hide in the intervals.</p>
       <p>Statute questions cannot be truly unseen, and the judge is itself a model. I re-judged 30 randomly drawn answers by hand (seed 20261017) and agreed with the judge on all 30. Only 13 of those were scored by the model judge, the other 17 being deterministic checks on fee figures and refusals, so the real evidence is 13 for 13, which still allows a disagreement rate of about 20% or less at 95% confidence. One jurisdiction, one 7B model, one adapter of each kind.</p>
-      <p>The fee router and its guard also misfire: on 6 of the 236 questions (about 2.5%) they replied with a fixed fee message to a question that was not a fee calculation, so the full pipeline's accuracy is somewhat understated.</p>
+      <p>The fee router and its guard also misfired: on 6 of the 236 questions (about 2.5%) they replied with a fixed fee message to a question that was not a fee calculation, so the full pipeline's accuracy is somewhat understated. I fixed both triggers after the test, and all six then answered correctly in a paired re-run, but that check is in-sample.</p>
     </div>
   </section>
 
