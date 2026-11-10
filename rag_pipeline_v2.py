@@ -16,7 +16,8 @@ import chromadb
 from openai import APIError, RateLimitError, AuthenticationError, APIStatusError
 from llm_client import get_client_and_model, completion_kwargs
 from rank_bm25 import BM25Okapi
-from sentence_transformers import SentenceTransformer
+import torch
+from sentence_transformers import CrossEncoder, SentenceTransformer
 import fee_router
 import case_matcher
 
@@ -29,6 +30,13 @@ TOP_K = 5
 # We no longer pass num_ctx; instead we keep CONTEXT_SNIPPET_CHARS so the prompt stays reasonable.
 CONTEXT_SNIPPET_CHARS = int(os.environ.get("CONTEXT_SNIPPET_CHARS", "2000"))  #CONTEXT_SNIPPET_CHARS = 2000
 DISABLE_CALCULATOR = os.environ.get("DISABLE_CALCULATOR") == "1"
+# Experimental, off by default: fetch RERANK_POOL dense and BM25 candidates instead of
+# top_k / bm25_k, then let a cross-encoder pick which ones fill the same final slots.
+RERANK_POOL = int(os.environ.get("RERANK_POOL", "0"))
+RERANK_MODEL = os.environ.get("RERANK_MODEL", "BAAI/bge-reranker-base")
+# On a laptop CPU the default re-ranker takes ~14 s per question; on a GPU it's far
+# faster. Uses CUDA when present unless RERANK_DEVICE says otherwise (cpu, cuda, mps).
+RERANK_DEVICE = os.environ.get("RERANK_DEVICE") or ("cuda" if torch.cuda.is_available() else "cpu")
 
 SYSTEM_PROMPT = """You are a legal research assistant specializing in advocate remuneration \
 under Kenya's Advocates Remuneration Order and related case law. Answer the user's question \
@@ -67,6 +75,7 @@ class RagPipeline:
         generation_model_name: str = GENERATION_MODEL_NAME,
     ):
         self.embedding_model = SentenceTransformer(embedding_model_name, device="cpu")
+        self.reranker = CrossEncoder(RERANK_MODEL, device=RERANK_DEVICE) if RERANK_POOL else None
         self.generation_model_name = generation_model_name
 
         self.client, self.generation_model_name, self.backend = get_client_and_model(generation_model_name)
@@ -194,9 +203,10 @@ class RagPipeline:
         query_with_instruction = f"Represent this sentence for searching relevant passages: {query}"
         query_embedding = self.embedding_model.encode([query_with_instruction], normalize_embeddings=True)
 
-        general_chunks = self._query_collection(query_embedding, n_results=top_k)
+        pool = max(top_k, RERANK_POOL) if self.reranker else top_k
+        general_chunks = self._query_collection(query_embedding, n_results=pool)
         statute_chunks = self._query_collection(query_embedding, n_results=statute_boost, where={"doc_type": "statute"})
-        bm25_chunks = self._bm25_search(query, n_results=bm25_k)
+        bm25_chunks = self._bm25_search(query, n_results=max(bm25_k, RERANK_POOL) if self.reranker else bm25_k)
 
         rrf_k = 60
         rrf_scores: dict[str, float] = {}
@@ -207,6 +217,8 @@ class RagPipeline:
                 rrf_scores[cid] = rrf_scores.get(cid, 0.0) + 1.0 / (rrf_k + rank)
                 chunk_by_id.setdefault(cid, chunk)
         merged = [chunk_by_id[cid] for cid in sorted(rrf_scores, key=lambda cid: rrf_scores[cid], reverse=True)]
+        if self.reranker:
+            merged = self._rerank(query, merged)
         limit = top_k + statute_boost
 
         # Case-scoped retrieval: chunk text rarely contains the case name, so when the
@@ -235,6 +247,11 @@ class RagPipeline:
         rest = [c for c in merged if c["chunk_id"] not in seen]
         return (pinned + rest)[:limit]
 
+
+    def _rerank(self, query: str, chunks: list[dict]) -> list[dict]:
+        """Order chunks by cross-encoder score, scoring the text the generator will see."""
+        scores = self.reranker.predict([(query, c["text"][:CONTEXT_SNIPPET_CHARS]) for c in chunks])
+        return [c for _, c in sorted(zip(scores, chunks), key=lambda pair: pair[0], reverse=True)]
 
     def build_context_block(self, retrieved_chunks: list[dict]) -> str:
         parts = []
