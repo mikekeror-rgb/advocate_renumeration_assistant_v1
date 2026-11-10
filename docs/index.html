@@ -140,6 +140,7 @@ footer { border-top: 1px solid var(--line); padding-top: 22px; font-size: 0.95re
       <a class="btn primary" href="report.pdf">Read the research report</a>
       <a class="btn" href="https://advocate-renumeration-assistant.streamlit.app/">Live demo</a>
       <a class="btn" href="https://github.com/mikekeror-rgb/advocate_renumeration_assistant_v1">Source code</a>
+      <a class="btn" href="https://github.com/mikekeror-rgb/rag-eval-harness">Evaluation skill (SKILL.md)</a>
       <a class="btn" href="https://huggingface.co/mikekeror/qwen2.5-7b-advocate-sft-lora-ep1">SFT adapter</a>
       <a class="btn" href="https://huggingface.co/mikekeror/qwen2.5-7b-advocate-dpo-lora">DPO adapter</a>
       <a class="btn" href="https://github.com/mikekeror-rgb/advocate_renumeration_assistant_v1/tree/prereg-v3.2">Pre-registration</a>
@@ -240,6 +241,7 @@ footer { border-top: 1px solid var(--line); padding-top: 22px; font-size: 0.95re
       </table>
     </div>
     <p style="margin-top:18px">Seventeen answers improved and seven got worse (sign test p = 0.064), so it is a promising single run rather than a settled result. About three of the seven losses came from the re-ranker crowding the context with near-duplicates, such as a neighbouring row of a fee table; the rest look like noise. A smaller, faster re-ranker and a cap on chunks per document both made retrieval worse. At about 14 seconds per question on a laptop CPU, the re-ranker stays off in the live demo; on a GPU it is fast.</p>
+    <p>Auditing this evaluation also turned up a retrieval metric that passed by construction on 72% of questions (171 of 236) and a judge that gave 7 of 10 wrong refusals a perfect score. The checks that caught them are packaged as a reusable Claude Code Agent Skill, <a href="https://github.com/mikekeror-rgb/rag-eval-harness">rag-eval-harness</a>, which adds the same kind of evaluation harness to any RAG app.</p>
   </section>
 
   <section>
